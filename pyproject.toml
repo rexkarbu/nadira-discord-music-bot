@@ -60,6 +60,7 @@ select = [
 ]
 ignore = [
     "ASYNC109", # async timeout parameter warning when library handles it
+    "N818",     # exception name should be named with an Error suffix
 ]
 
 [tool.ruff.lint.isort]
