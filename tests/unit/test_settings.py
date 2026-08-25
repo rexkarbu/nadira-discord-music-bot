@@ -81,6 +81,32 @@ def test_redis_url_credential_masking(valid_env_dict: dict[str, Any]) -> None:
     assert summary["REDIS_URL"] == "<configured>"
 
 
+def test_redis_url_validation_error_leakage_regression(valid_env_dict: dict[str, Any]) -> None:
+    """Regression test: kredensial pada REDIS_URL invalid tidak bocor di ValidationError."""
+    secret_user = "admin_user"
+    secret_pass = "super_secret_password"
+    invalid_url = f"http://{secret_user}:{secret_pass}@redis.example.com:6379/0"
+
+    data = dict(valid_env_dict)
+    data["QUEUE_BACKEND"] = "redis"
+    data["REDIS_URL"] = invalid_url
+
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(_env_file=None, **data)
+
+    err_str = str(exc_info.value)
+    # Pastikan username dan password tidak muncul dalam str(ValidationError)
+    assert secret_user not in err_str
+    assert secret_pass not in err_str
+
+    # Pastikan username dan password tidak muncul dalam setiap msg dari errors()
+    for err in exc_info.value.errors():
+        msg_str = err.get("msg", "")
+        assert secret_user not in msg_str
+        assert secret_pass not in msg_str
+        assert "REDIS_URL harus menggunakan skema redis:// atau rediss://." in msg_str
+
+
 def test_lavalink_password_default_consistency() -> None:
     """Memverifikasi bahwa default password Lavalink pada settings adalah 'youshallnotpass'."""
     data = {
@@ -202,4 +228,4 @@ def test_redis_backend_with_invalid_scheme(valid_env_dict: dict[str, Any]) -> No
 
     with pytest.raises(ValidationError) as exc_info:
         Settings(_env_file=None, **data)
-    assert "REDIS_URL harus diawali redis://" in str(exc_info.value)
+    assert "REDIS_URL harus menggunakan skema redis:// atau rediss://." in str(exc_info.value)

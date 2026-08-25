@@ -151,8 +151,7 @@ class Settings(BaseSettings):
             if not (
                 self.REDIS_URL.startswith("redis://") or self.REDIS_URL.startswith("rediss://")
             ):
-                msg = f"REDIS_URL harus diawali redis:// / rediss://. Diberikan: '{self.REDIS_URL}'"
-                raise ValueError(msg)
+                raise ValueError("REDIS_URL harus menggunakan skema redis:// atau rediss://.")
         return self
 
     def safe_summary(self) -> dict[str, Any]:
