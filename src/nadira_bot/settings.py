@@ -170,15 +170,21 @@ class Settings(BaseSettings):
             "DEFAULT_VOLUME": self.DEFAULT_VOLUME,
             "DISCORD_TOKEN": "**********",
             "LAVALINK_PASSWORD": "**********",
-            "REDIS_URL": self.REDIS_URL if self.REDIS_URL else None,
+            "REDIS_URL": "<configured>" if self.REDIS_URL else None,
         }
 
     def __repr__(self) -> str:
-        """Representasi string aman yang menutupi secret token dan password."""
+        """Representasi string aman yang menutupi secret token, password, dan credentials."""
+        redis_display = "<configured>" if self.REDIS_URL else "None"
         return (
             f"Settings(APPLICATION_ID={self.DISCORD_APPLICATION_ID}, "
             f"TEST_GUILD_ID={self.DISCORD_TEST_GUILD_ID}, "
             f"LAVALINK_URI='{self.LAVALINK_URI}', "
             f"LOG_LEVEL='{self.LOG_LEVEL}', "
+            f"REDIS_URL={redis_display}, "
             f"TOKEN=***, LAVALINK_PASSWORD=***)"
         )
+
+    def __str__(self) -> str:
+        """Representasi string yang konsisten dengan safe repr."""
+        return repr(self)

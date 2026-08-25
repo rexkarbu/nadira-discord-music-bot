@@ -1,8 +1,8 @@
-# Multi-stage build for Python 3.12 with uv
+# Multi-stage build for Python 3.12 with uv (pinned exact version)
 FROM python:3.12-slim AS builder
 
-# Install uv for fast, deterministic dependency resolution
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+# Install pinned uv for deterministic dependency resolution
+COPY --from=ghcr.io/astral-sh/uv:0.12.1 /uv /uvx /bin/
 
 WORKDIR /app
 

@@ -68,7 +68,7 @@ async def test_command_sync_global_fallback(valid_env_dict: dict[str, Any]) -> N
     """Memverifikasi sinkronisasi global saat DISCORD_TEST_GUILD_ID bernilai None."""
     data = dict(valid_env_dict)
     data["DISCORD_TEST_GUILD_ID"] = None
-    settings = Settings.model_validate(data)
+    settings = Settings(_env_file=None, **data)
 
     bot = NadiraBot(settings)
     try:
@@ -100,6 +100,7 @@ async def test_wavelink_mocked_lifecycle_events(valid_settings: Settings) -> Non
 
         assert bot.lavalink_connected is True
         assert bot._lavalink_ready_event.is_set()
+        assert bot._current_backoff_seconds == 5.0
 
         # Simulasi NodeDisconnectedEventPayload
         disconnect_payload = MagicMock(spec=wavelink.NodeDisconnectedEventPayload)
@@ -120,7 +121,6 @@ async def test_reconnect_supervisor_no_duplicates_and_clean_close(
     bot = NadiraBot(valid_settings)
 
     try:
-        # Panggil start supervisor pertama kali
         bot._start_reconnect_supervisor()
         first_task = bot._reconnect_task
         assert first_task is not None
@@ -137,6 +137,45 @@ async def test_reconnect_supervisor_no_duplicates_and_clean_close(
         await bot.close()
         assert bot._reconnect_task is not None
         assert bot._reconnect_task.done()
+
+
+@pytest.mark.asyncio
+async def test_reconnect_backoff_progression_when_node_disconnected(
+    valid_settings: Settings,
+) -> None:
+    """Memverifikasi urutan peningkatan backoff meskipun Pool.reconnect() tidak throw exception."""
+    bot = NadiraBot(valid_settings)
+    mock_node = MagicMock(spec=wavelink.Node)
+    mock_node.status = wavelink.NodeStatus.DISCONNECTED
+    bot._lavalink_node = mock_node
+
+    recorded_backoffs: list[float] = []
+    iteration_count = 0
+
+    async def mock_sleep(_delay: float) -> None:
+        nonlocal iteration_count
+        iteration_count += 1
+        recorded_backoffs.append(bot._current_backoff_seconds)
+        if iteration_count >= 5:
+            # Hentikan loop setelah 5 iterasi
+            bot._lavalink_ready_event.set()
+
+    try:
+        with (
+            patch("asyncio.sleep", side_effect=mock_sleep),
+            patch("wavelink.Pool.reconnect", new_callable=AsyncMock) as mock_reconnect,
+        ):
+            await bot._reconnect_supervisor_loop()
+
+            assert mock_reconnect.await_count >= 4
+            # Urutan backoff harus meningkat: 5.0 -> 10.0 -> 20.0 -> 40.0 -> 60.0
+            assert recorded_backoffs[0] == 5.0
+            assert recorded_backoffs[1] == 10.0
+            assert recorded_backoffs[2] == 20.0
+            assert recorded_backoffs[3] == 40.0
+            assert recorded_backoffs[4] == 60.0
+    finally:
+        await bot.close()
 
 
 def test_structured_json_logging_formatter() -> None:

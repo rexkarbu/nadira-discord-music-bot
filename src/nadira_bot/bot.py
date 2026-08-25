@@ -41,6 +41,7 @@ class NadiraBot(commands.Bot):
         self._lavalink_node: wavelink.Node | None = None
         self._lavalink_ready_event: asyncio.Event = asyncio.Event()
         self._reconnect_task: asyncio.Task[None] | None = None
+        self._current_backoff_seconds: float = 5.0
 
     async def setup_hook(self) -> None:
         """Lifecycle hook startup: memuat ekstensi, Lavalink, dan sync slash commands."""
@@ -122,14 +123,14 @@ class NadiraBot(commands.Bot):
             self._reconnect_task = asyncio.create_task(self._reconnect_supervisor_loop())
 
     async def _reconnect_supervisor_loop(self) -> None:
-        """Supervisor loop yang memanggil Pool.reconnect() dengan backoff dan jitter."""
-        backoff_seconds = 5.0
+        """Supervisor loop yang memanggil Pool.reconnect() dengan exponential backoff dan jitter."""
+        self._current_backoff_seconds = 5.0
         max_backoff = 60.0
 
         while not self._lavalink_ready_event.is_set() and not self.is_closed():
             try:
                 jitter = random.uniform(0.5, 2.0)
-                delay = backoff_seconds + jitter
+                delay = self._current_backoff_seconds + jitter
                 logger.info(
                     "Supervisor menunggu untuk reconnect Wavelink Pool...",
                     extra={"retry_delay_seconds": round(delay, 2)},
@@ -140,6 +141,20 @@ class NadiraBot(commands.Bot):
 
                 logger.info("Supervisor mengeksekusi Pool.reconnect()...")
                 await wavelink.Pool.reconnect()
+
+                # Periksa status node setelah percobaan reconnect
+                if (
+                    self._lavalink_node
+                    and self._lavalink_node.status == wavelink.NodeStatus.CONNECTED
+                ):
+                    self.lavalink_connected = True
+                    self._lavalink_ready_event.set()
+                    self._current_backoff_seconds = 5.0
+                    logger.info("Supervisor mendeteksi node CONNECTED, supervisor selesai.")
+                    break
+
+                # Jika masih DISCONNECTED, naikkan backoff
+                self._current_backoff_seconds = min(self._current_backoff_seconds * 2, max_backoff)
             except asyncio.CancelledError:
                 break
             except Exception as err:
@@ -147,7 +162,7 @@ class NadiraBot(commands.Bot):
                     "Supervisor Pool.reconnect() gagal, mencoba kembali nanti",
                     extra={"error": str(err)},
                 )
-                backoff_seconds = min(backoff_seconds * 2, max_backoff)
+                self._current_backoff_seconds = min(self._current_backoff_seconds * 2, max_backoff)
 
     async def on_ready(self) -> None:
         """Event saat koneksi gateway Discord berhasil terjalin."""
@@ -165,6 +180,7 @@ class NadiraBot(commands.Bot):
         """Event handler ketika node Wavelink siap digunakan."""
         self.lavalink_connected = True
         self._lavalink_ready_event.set()
+        self._current_backoff_seconds = 5.0
         logger.info(
             "Wavelink node telah siap dan aktif",
             extra={"node_status": "ready", "resumed": payload.resumed},

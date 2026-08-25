@@ -53,6 +53,34 @@ def test_secret_masking(valid_settings: Settings) -> None:
     assert summary["LAVALINK_PASSWORD"] == "**********"
 
 
+def test_redis_url_credential_masking(valid_env_dict: dict[str, Any]) -> None:
+    """Memverifikasi bahwa kredensial pada REDIS_URL tidak bocor ke repr, str, atau safe_summary."""
+    secret_user = "admin_user_secret"
+    secret_pass = "super_secret_redis_pass_xyz999"
+    credentialed_url = f"redis://{secret_user}:{secret_pass}@redis.example.com:6379/0"
+
+    data = dict(valid_env_dict)
+    data["QUEUE_BACKEND"] = "redis"
+    data["REDIS_URL"] = credentialed_url
+
+    settings = Settings(_env_file=None, **data)
+
+    repr_str = repr(settings)
+    str_str = str(settings)
+    summary = settings.safe_summary()
+
+    # Pastikan username & password tidak pernah muncul
+    assert secret_user not in repr_str
+    assert secret_pass not in repr_str
+    assert secret_user not in str_str
+    assert secret_pass not in str_str
+    assert secret_user not in str(summary)
+    assert secret_pass not in str(summary)
+
+    # Pastikan safe_summary menyamarkan nilai menjadi '<configured>'
+    assert summary["REDIS_URL"] == "<configured>"
+
+
 def test_lavalink_password_default_consistency() -> None:
     """Memverifikasi bahwa default password Lavalink pada settings adalah 'youshallnotpass'."""
     data = {
