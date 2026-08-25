@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 import pytest
 
 from nadira_bot.domain.errors import (
+    DuplicateQueueEntry,
     GuildMismatch,
     InvalidStateTransition,
     InvalidVolume,
@@ -106,6 +107,55 @@ class BaseQueueRepositoryContractTests(ABC):
         s1 = await repo.append(100, [], expected_version=0)
         assert s1.version == 0
         assert s1.upcoming == ()
+
+    @pytest.mark.asyncio
+    async def test_append_duplicate_entry_id_in_batch_rejected(self) -> None:
+        repo = await self.create_repository()
+        e1 = make_entry(guild_id=100, title="Song 1")
+
+        with pytest.raises(DuplicateQueueEntry):
+            await repo.append(100, [e1, e1], expected_version=0)
+
+        session = await repo.get_session(100)
+        assert session.version == 0
+        assert session.upcoming == ()
+
+    @pytest.mark.asyncio
+    async def test_append_already_existing_entry_id_rejected(self) -> None:
+        repo = await self.create_repository()
+        e1 = make_entry(guild_id=100, title="Song 1")
+        await repo.append(100, [e1], expected_version=0)  # version = 1
+
+        with pytest.raises(DuplicateQueueEntry):
+            await repo.append(100, [e1], expected_version=1)
+
+        session = await repo.get_session(100)
+        assert session.version == 1
+        assert session.upcoming == (e1,)
+
+    @pytest.mark.asyncio
+    async def test_append_same_track_different_entry_id_accepted(self) -> None:
+        repo = await self.create_repository()
+        track = make_track(title="Song 1")
+        e1 = QueueEntry(
+            id=uuid.uuid4(),
+            guild_id=100,
+            track=track,
+            requested_by_user_id=1,
+            requested_in_channel_id=1,
+            enqueued_at=datetime.now(UTC),
+        )
+        e2 = QueueEntry(
+            id=uuid.uuid4(),
+            guild_id=100,
+            track=track,
+            requested_by_user_id=1,
+            requested_in_channel_id=1,
+            enqueued_at=datetime.now(UTC),
+        )
+        s1 = await repo.append(100, [e1, e2], expected_version=0)
+        assert s1.version == 1
+        assert len(s1.upcoming) == 2
 
     @pytest.mark.asyncio
     async def test_append_version_conflict(self) -> None:
@@ -297,10 +347,10 @@ class BaseQueueRepositoryContractTests(ABC):
                 100, SessionStateUpdate(current_entry=e1), expected_version=0
             )
 
-        # 2. Illegal State Transition
+        # 2. Illegal State Transition (DISCONNECTED -> IDLE)
         with pytest.raises(InvalidStateTransition, match="Transisi status playback tidak sah"):
             await repo.update_session_state(
-                100, SessionStateUpdate(state=PlaybackState.PLAYING), expected_version=0
+                100, SessionStateUpdate(state=PlaybackState.IDLE), expected_version=0
             )
 
         # 3. Invalid Channel ID
@@ -321,6 +371,55 @@ class BaseQueueRepositoryContractTests(ABC):
             100, SessionStateUpdate(state=PlaybackState.CONNECTING), expected_version=1
         )
         assert s2.version == 1
+
+    @pytest.mark.asyncio
+    async def test_state_and_current_entry_consistency_on_update_session_state(self) -> None:
+        repo = await self.create_repository()
+        e1 = make_entry(guild_id=100, title="Song 1")
+
+        # Inisiasi ke PLAYING
+        await repo.append(100, [e1], expected_version=0)  # v=1
+        await repo.update_session_state(
+            100, SessionStateUpdate(state=PlaybackState.CONNECTING), expected_version=1
+        )  # v=2
+        await repo.update_session_state(
+            100,
+            SessionStateUpdate(state=PlaybackState.IDLE, voice_channel_id=999),
+            expected_version=2,
+        )  # v=3
+        _, s4 = await repo.claim_next(100, expected_version=3)  # v=4, state=PLAYING, current=e1
+        assert s4.version == 4
+
+        # a. Mencoba ubah state ke IDLE tanpa meng-clear current_entry -> ditolak
+        with pytest.raises(
+            InvalidStateTransition, match="Status 'idle' wajib memiliki current_entry bernilai None"
+        ):
+            await repo.update_session_state(
+                100, SessionStateUpdate(state=PlaybackState.IDLE), expected_version=4
+            )
+
+        # b. Valid atomic stop: PLAYING -> IDLE + clear current_entry
+        s5 = await repo.update_session_state(
+            100,
+            SessionStateUpdate(state=PlaybackState.IDLE, current_entry=None),
+            expected_version=4,
+        )
+        assert s5.version == 5
+        assert s5.state == PlaybackState.IDLE
+        assert s5.current_entry is None
+
+        # c. Valid disconnect: IDLE -> DISCONNECTED + clear voice_channel_id
+        s6 = await repo.update_session_state(
+            100,
+            SessionStateUpdate(
+                state=PlaybackState.DISCONNECTED,
+                voice_channel_id=None,
+                current_entry=None,
+            ),
+            expected_version=5,
+        )
+        assert s6.version == 6
+        assert s6.state == PlaybackState.DISCONNECTED
 
     @pytest.mark.asyncio
     async def test_apply_playback_transition(self) -> None:
@@ -370,3 +469,30 @@ class BaseQueueRepositoryContractTests(ABC):
 
         session = await repo.get_session(100)
         assert session.version == 0
+
+    @pytest.mark.asyncio
+    async def test_apply_playback_transition_consistency_rejection(self) -> None:
+        repo = await self.create_repository()
+        e1 = make_entry(guild_id=100)
+
+        # Transition ke PLAYING tapi current None -> ditolak
+        trans_invalid = PlaybackTransition(
+            next_current_entry=None,
+            next_upcoming=(),
+            next_state=PlaybackState.PLAYING,
+        )
+        with pytest.raises(
+            InvalidStateTransition, match="Status 'playing' wajib memiliki current_entry"
+        ):
+            await repo.apply_playback_transition(100, trans_invalid, expected_version=0)
+
+        # Transition ke IDLE tapi ada current_entry -> ditolak
+        trans_idle_invalid = PlaybackTransition(
+            next_current_entry=e1,
+            next_upcoming=(),
+            next_state=PlaybackState.IDLE,
+        )
+        with pytest.raises(
+            InvalidStateTransition, match="Status 'idle' wajib memiliki current_entry bernilai None"
+        ):
+            await repo.apply_playback_transition(100, trans_idle_invalid, expected_version=0)

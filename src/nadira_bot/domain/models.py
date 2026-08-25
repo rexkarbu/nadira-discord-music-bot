@@ -103,8 +103,12 @@ class TrackReference:
             raise ValueError("TrackReference.search_hint tidak boleh kosong.")
         if not isinstance(self.artists, tuple):
             raise TypeError("TrackReference.artists wajib bertipe tuple.")
-        if self.duration_ms is not None and self.duration_ms < 0:
-            raise ValueError("duration_ms harus >= 0 atau None.")
+        if type(self.is_stream) is not bool:
+            raise TypeError("is_stream wajib bertipe bool.")
+        if self.duration_ms is not None and (
+            type(self.duration_ms) is not int or self.duration_ms < 0
+        ):
+            raise ValueError("duration_ms harus int >= 0 atau None.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,8 +124,8 @@ class PlaylistContext:
             raise ValueError("playlist_id tidak boleh kosong.")
         if not self.playlist_name or not self.playlist_name.strip():
             raise ValueError("playlist_name tidak boleh kosong.")
-        if self.position < 1:
-            raise ValueError("playlist position harus >= 1.")
+        if type(self.position) is not int or self.position < 1:
+            raise ValueError("playlist position harus int >= 1.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,16 +144,16 @@ class QueueEntry:
     def __post_init__(self) -> None:
         if not isinstance(self.id, UUID):
             raise TypeError("QueueEntry.id wajib bertipe UUID.")
-        if self.guild_id <= 0:
+        if type(self.guild_id) is not int or self.guild_id <= 0:
             raise ValueError("guild_id harus integer positif (> 0).")
-        if self.requested_by_user_id <= 0:
+        if type(self.requested_by_user_id) is not int or self.requested_by_user_id <= 0:
             raise ValueError("requested_by_user_id harus integer positif (> 0).")
-        if self.requested_in_channel_id <= 0:
+        if type(self.requested_in_channel_id) is not int or self.requested_in_channel_id <= 0:
             raise ValueError("requested_in_channel_id harus integer positif (> 0).")
         if self.enqueued_at.tzinfo is None or self.enqueued_at.utcoffset() != UTC.utcoffset(None):
             raise ValueError("enqueued_at wajib berupa timezone-aware UTC datetime.")
-        if self.attempt_count < 0:
-            raise ValueError("attempt_count harus >= 0.")
+        if type(self.attempt_count) is not int or self.attempt_count < 0:
+            raise ValueError("attempt_count harus int >= 0.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,15 +198,21 @@ class VersionedGuildSession:
     idle_deadline: datetime | None = None
 
     def __post_init__(self) -> None:
-        if self.guild_id <= 0:
+        if type(self.guild_id) is not int or self.guild_id <= 0:
             raise ValueError("guild_id harus integer positif (> 0).")
-        if self.version < 0 or self.generation < 0:
-            raise ValueError("version dan generation harus >= 0.")
-        if not (0 <= self.volume <= 100):
-            raise ValueError("volume harus bernilai antara 0 dan 100.")
-        if self.voice_channel_id is not None and self.voice_channel_id <= 0:
+        if type(self.version) is not int or self.version < 0:
+            raise ValueError("version harus int >= 0.")
+        if type(self.generation) is not int or self.generation < 0:
+            raise ValueError("generation harus int >= 0.")
+        if type(self.volume) is not int or not (0 <= self.volume <= 100):
+            raise ValueError("volume harus int antara 0 dan 100.")
+        if self.voice_channel_id is not None and (
+            type(self.voice_channel_id) is not int or self.voice_channel_id <= 0
+        ):
             raise ValueError("voice_channel_id harus integer positif (> 0) jika tidak None.")
-        if self.text_channel_id is not None and self.text_channel_id <= 0:
+        if self.text_channel_id is not None and (
+            type(self.text_channel_id) is not int or self.text_channel_id <= 0
+        ):
             raise ValueError("text_channel_id harus integer positif (> 0) jika tidak None.")
         if not isinstance(self.upcoming, tuple):
             raise TypeError("upcoming wajib bertipe tuple.")
@@ -213,10 +223,28 @@ class VersionedGuildSession:
                 raise ValueError(
                     "Setiap upcoming entry harus memiliki guild_id yang sama dengan session."
                 )
-        if self.current_entry is not None:
-            upcoming_ids = {e.id for e in self.upcoming}
-            if self.current_entry.id in upcoming_ids:
-                raise ValueError("current_entry.id tidak boleh muncul juga di upcoming.")
+
+        # State and current_entry consistency invariants
+        if (
+            self.state in (PlaybackState.PLAYING, PlaybackState.PAUSED)
+            and self.current_entry is None
+        ):
+            msg = f"Status '{self.state.value}' wajib memiliki current_entry."
+            raise ValueError(msg)
+        if (
+            self.state in (PlaybackState.IDLE, PlaybackState.DISCONNECTED, PlaybackState.CONNECTING)
+            and self.current_entry is not None
+        ):
+            msg = f"Status '{self.state.value}' wajib memiliki current_entry bernilai None."
+            raise ValueError(msg)
+
+        # Uniqueness of QueueEntry.id
+        upcoming_ids = [e.id for e in self.upcoming]
+        if len(upcoming_ids) != len(set(upcoming_ids)):
+            raise ValueError("Terdapat QueueEntry.id duplikat di dalam upcoming queue.")
+        if self.current_entry is not None and self.current_entry.id in set(upcoming_ids):
+            raise ValueError("current_entry.id tidak boleh muncul juga di upcoming.")
+
         if self.idle_deadline is not None and (
             self.idle_deadline.tzinfo is None
             or self.idle_deadline.utcoffset() != UTC.utcoffset(None)

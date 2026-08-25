@@ -44,6 +44,14 @@ class TestConcurrencyAndIsolation:
         assert lock1 is lock2
         assert lock1 is not lock_other
 
+    def test_invalid_max_queue_tracks_rejected(self) -> None:
+        with pytest.raises(ValueError, match="max_queue_tracks harus integer positif"):
+            InMemoryQueueRepository(max_queue_tracks=0)
+        with pytest.raises(ValueError, match="max_queue_tracks harus integer positif"):
+            InMemoryQueueRepository(max_queue_tracks=True)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="max_queue_tracks harus integer positif"):
+            InMemoryQueueRepository(max_queue_tracks=-10)
+
     @pytest.mark.asyncio
     async def test_concurrent_append_race_condition(self) -> None:
         repo = InMemoryQueueRepository()
@@ -79,31 +87,42 @@ class TestConcurrencyAndIsolation:
 
     @pytest.mark.asyncio
     async def test_guild_isolation_concurrent_mutations(self) -> None:
-        repo = InMemoryQueueRepository()
-        g1 = 100
-        g2 = 200
-        e1 = make_entry(g1, "Track G1")
-        e2 = make_entry(g2, "Track G2")
+        registry = GuildLockRegistry()
+        repo = InMemoryQueueRepository(lock_registry=registry)
+        g_a = 100
+        g_b = 200
+        e_a = make_entry(g_a, "Track A")
+        e_b = make_entry(g_b, "Track B")
 
-        start_gate = asyncio.Event()
+        lock_a_held = asyncio.Event()
+        release_lock_a = asyncio.Event()
+        guild_b_completed = asyncio.Event()
 
-        async def worker(guild: int, entry: QueueEntry) -> bool:
-            await start_gate.wait()
-            session = await repo.append(guild, [entry], expected_version=0)
-            return session.version == 1
+        async def hold_guild_a_lock() -> None:
+            async with registry.get_lock(g_a):
+                lock_a_held.set()
+                # Tahan lock Guild A sampai Guild B selesai
+                await release_lock_a.wait()
+            # Setelah lock g_a lepas, jalankan append untuk Guild A
+            await repo.append(g_a, [e_a], expected_version=0)
 
-        t1 = asyncio.create_task(worker(g1, e1))
-        t2 = asyncio.create_task(worker(g2, e2))
+        async def mutate_guild_b() -> None:
+            # Tunggu sampai lock Guild A benar-benar sedang ditahan
+            await lock_a_held.wait()
+            # Buktikan Guild B dapat melakukan mutasi tanpa terhalang lock Guild A
+            session_b = await repo.append(g_b, [e_b], expected_version=0)
+            assert session_b.version == 1
+            assert session_b.upcoming == (e_b,)
+            guild_b_completed.set()
+            # Sekarang lepaskan lock Guild A
+            release_lock_a.set()
 
-        start_gate.set()
-        res1, res2 = await asyncio.gather(t1, t2)
+        task_a = asyncio.create_task(hold_guild_a_lock())
+        task_b = asyncio.create_task(mutate_guild_b())
 
-        assert res1 is True
-        assert res2 is True
+        await asyncio.gather(task_a, task_b)
 
-        s1 = await repo.get_session(g1)
-        s2 = await repo.get_session(g2)
-        assert s1.version == 1
-        assert s1.upcoming == (e1,)
-        assert s2.version == 1
-        assert s2.upcoming == (e2,)
+        assert guild_b_completed.is_set()
+        session_a = await repo.get_session(g_a)
+        assert session_a.version == 1
+        assert session_a.upcoming == (e_a,)

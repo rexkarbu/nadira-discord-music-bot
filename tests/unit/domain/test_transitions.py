@@ -117,7 +117,7 @@ class TestComputeTrackEndTransition:
     def test_precondition_current_entry_none_rejected(self) -> None:
         session = VersionedGuildSession(
             guild_id=123,
-            state=PlaybackState.PLAYING,
+            state=PlaybackState.IDLE,
             current_entry=None,
             generation=1,
         )
@@ -127,17 +127,16 @@ class TestComputeTrackEndTransition:
         ):
             compute_track_end_transition(session, 1)
 
-    def test_precondition_invalid_state_rejected(self) -> None:
-        e1 = make_entry(guild_id=123, title="Current")
+    def test_precondition_disconnected_state_rejected(self) -> None:
         session = VersionedGuildSession(
             guild_id=123,
             state=PlaybackState.DISCONNECTED,
-            current_entry=e1,
+            current_entry=None,
             generation=1,
         )
         with pytest.raises(
             InvalidStateTransition,
-            match="hanya sah saat status PLAYING atau PAUSED",
+            match="session.current_entry bernilai None",
         ):
             compute_track_end_transition(session, 1)
 

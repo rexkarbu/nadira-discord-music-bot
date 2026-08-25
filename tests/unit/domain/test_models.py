@@ -90,8 +90,12 @@ class TestTrackReference:
             make_track(search_hint="")
 
     def test_negative_duration_rejected(self) -> None:
-        with pytest.raises(ValueError, match="duration_ms harus >= 0"):
+        with pytest.raises(ValueError, match="duration_ms harus int >= 0"):
             make_track(duration_ms=-10)
+
+    def test_duration_boolean_rejected(self) -> None:
+        with pytest.raises(ValueError, match="duration_ms harus int >= 0"):
+            make_track(duration_ms=True)  # type: ignore[arg-type]
 
     def test_none_duration_allowed(self) -> None:
         track = make_track(duration_ms=None)
@@ -112,8 +116,12 @@ class TestPlaylistContext:
             PlaylistContext(playlist_id="p1", playlist_name="   ", position=1)
 
     def test_invalid_position_rejected(self) -> None:
-        with pytest.raises(ValueError, match="playlist position harus >= 1"):
+        with pytest.raises(ValueError, match="playlist position harus int >= 1"):
             PlaylistContext(playlist_id="p1", playlist_name="Name", position=0)
+
+    def test_boolean_position_rejected(self) -> None:
+        with pytest.raises(ValueError, match="playlist position harus int >= 1"):
+            PlaylistContext(playlist_id="p1", playlist_name="Name", position=True)  # type: ignore[arg-type]
 
 
 class TestQueueEntry:
@@ -127,6 +135,17 @@ class TestQueueEntry:
             QueueEntry(
                 id=uuid.uuid4(),
                 guild_id=0,
+                track=make_track(),
+                requested_by_user_id=1,
+                requested_in_channel_id=1,
+                enqueued_at=datetime.now(UTC),
+            )
+
+    def test_boolean_snowflake_rejected(self) -> None:
+        with pytest.raises(ValueError, match="guild_id harus integer positif"):
+            QueueEntry(
+                id=uuid.uuid4(),
+                guild_id=True,  # type: ignore[arg-type]
                 track=make_track(),
                 requested_by_user_id=1,
                 requested_in_channel_id=1,
@@ -159,12 +178,20 @@ class TestVersionedGuildSession:
         assert session.exact_total_duration_ms == 0
 
     def test_negative_version_rejected(self) -> None:
-        with pytest.raises(ValueError, match="version dan generation harus >= 0"):
+        with pytest.raises(ValueError, match="version harus int >= 0"):
             VersionedGuildSession(guild_id=123, version=-1)
 
+    def test_boolean_version_rejected(self) -> None:
+        with pytest.raises(ValueError, match="version harus int >= 0"):
+            VersionedGuildSession(guild_id=123, version=True)  # type: ignore[arg-type]
+
     def test_invalid_volume_rejected(self) -> None:
-        with pytest.raises(ValueError, match="volume harus bernilai antara 0 dan 100"):
+        with pytest.raises(ValueError, match="volume harus int antara 0 dan 100"):
             VersionedGuildSession(guild_id=123, volume=101)
+
+    def test_boolean_volume_rejected(self) -> None:
+        with pytest.raises(ValueError, match="volume harus int antara 0 dan 100"):
+            VersionedGuildSession(guild_id=123, volume=True)  # type: ignore[arg-type]
 
     def test_invalid_channel_id_rejected(self) -> None:
         with pytest.raises(ValueError, match="voice_channel_id harus integer positif"):
@@ -181,7 +208,7 @@ class TestVersionedGuildSession:
     def test_cross_guild_current_entry_rejected(self) -> None:
         entry = make_entry(guild_id=999)
         with pytest.raises(ValueError, match="current_entry.guild_id harus sama"):
-            VersionedGuildSession(guild_id=123, current_entry=entry)
+            VersionedGuildSession(guild_id=123, state=PlaybackState.PLAYING, current_entry=entry)
 
     def test_cross_guild_upcoming_entry_rejected(self) -> None:
         entry = make_entry(guild_id=999)
@@ -190,12 +217,70 @@ class TestVersionedGuildSession:
         ):
             VersionedGuildSession(guild_id=123, upcoming=(entry,))
 
+    def test_state_current_entry_consistency(self) -> None:
+        entry = make_entry(guild_id=123)
+
+        # PLAYING / PAUSED wajib memiliki current_entry
+        with pytest.raises(ValueError, match="Status 'playing' wajib memiliki current_entry"):
+            VersionedGuildSession(guild_id=123, state=PlaybackState.PLAYING, current_entry=None)
+
+        with pytest.raises(ValueError, match="Status 'paused' wajib memiliki current_entry"):
+            VersionedGuildSession(guild_id=123, state=PlaybackState.PAUSED, current_entry=None)
+
+        # IDLE / DISCONNECTED / CONNECTING wajib current_entry=None
+        with pytest.raises(ValueError, match="wajib memiliki current_entry bernilai None"):
+            VersionedGuildSession(guild_id=123, state=PlaybackState.IDLE, current_entry=entry)
+
+        with pytest.raises(ValueError, match="wajib memiliki current_entry bernilai None"):
+            VersionedGuildSession(
+                guild_id=123, state=PlaybackState.DISCONNECTED, current_entry=entry
+            )
+
+        with pytest.raises(ValueError, match="wajib memiliki current_entry bernilai None"):
+            VersionedGuildSession(guild_id=123, state=PlaybackState.CONNECTING, current_entry=entry)
+
     def test_current_entry_in_upcoming_rejected(self) -> None:
         entry = make_entry(guild_id=123)
         with pytest.raises(
             ValueError, match="current_entry.id tidak boleh muncul juga di upcoming"
         ):
-            VersionedGuildSession(guild_id=123, current_entry=entry, upcoming=(entry,))
+            VersionedGuildSession(
+                guild_id=123,
+                state=PlaybackState.PLAYING,
+                current_entry=entry,
+                upcoming=(entry,),
+            )
+
+    def test_duplicate_entry_id_in_upcoming_rejected(self) -> None:
+        entry = make_entry(guild_id=123)
+        with pytest.raises(
+            ValueError, match="Terdapat QueueEntry.id duplikat di dalam upcoming queue"
+        ):
+            VersionedGuildSession(
+                guild_id=123,
+                upcoming=(entry, entry),
+            )
+
+    def test_same_track_different_entry_ids_allowed(self) -> None:
+        track = make_track(title="Identical Track")
+        e1 = QueueEntry(
+            id=uuid.uuid4(),
+            guild_id=123,
+            track=track,
+            requested_by_user_id=1,
+            requested_in_channel_id=1,
+            enqueued_at=datetime.now(UTC),
+        )
+        e2 = QueueEntry(
+            id=uuid.uuid4(),
+            guild_id=123,
+            track=track,
+            requested_by_user_id=1,
+            requested_in_channel_id=1,
+            enqueued_at=datetime.now(UTC),
+        )
+        session = VersionedGuildSession(guild_id=123, upcoming=(e1, e2))
+        assert session.queue_length == 2
 
     def test_duration_metrics(self) -> None:
         e1 = make_entry(guild_id=123, duration_ms=60000)

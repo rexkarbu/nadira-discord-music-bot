@@ -39,3 +39,7 @@ class InvalidStateTransition(NadiraDomainError):
 
 class StalePlaybackEvent(NadiraDomainError):
     """Event playback membawa generation token usang atau tidak cocok."""
+
+
+class DuplicateQueueEntry(NadiraDomainError):
+    """QueueEntry.id duplikat terdeteksi dalam antrean atau batch operasi."""

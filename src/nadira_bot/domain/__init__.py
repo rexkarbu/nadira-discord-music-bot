@@ -4,6 +4,7 @@ Menyediakan data models murni, typed exceptions, transition functions, dan value
 """
 
 from nadira_bot.domain.errors import (
+    DuplicateQueueEntry,
     GuildMismatch,
     InvalidStateTransition,
     InvalidVolume,
@@ -25,12 +26,14 @@ from nadira_bot.domain.models import (
     SessionStateUpdate,
     SourceType,
     TrackReference,
+    UnsetType,
     VersionedGuildSession,
 )
 
 __all__ = [
     "ALLOWED_STATE_TRANSITIONS",
     "UNSET",
+    "DuplicateQueueEntry",
     "GuildMismatch",
     "InvalidStateTransition",
     "InvalidVolume",
@@ -47,6 +50,7 @@ __all__ = [
     "SourceType",
     "StalePlaybackEvent",
     "TrackReference",
+    "UnsetType",
     "VersionConflict",
     "VersionedGuildSession",
 ]

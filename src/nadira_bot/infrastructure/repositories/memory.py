@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 from nadira_bot.domain.errors import (
+    DuplicateQueueEntry,
     GuildMismatch,
     InvalidStateTransition,
     InvalidVolume,
@@ -42,6 +43,8 @@ class InMemoryQueueRepository(QueueRepository):
         max_queue_tracks: int = 1000,
         lock_registry: GuildLockRegistry | None = None,
     ) -> None:
+        if type(max_queue_tracks) is not int or max_queue_tracks <= 0:
+            raise ValueError("max_queue_tracks harus integer positif (> 0).")
         self._max_queue_tracks = max_queue_tracks
         self._lock_registry = lock_registry or GuildLockRegistry()
         self._sessions: dict[int, VersionedGuildSession] = {}
@@ -76,6 +79,17 @@ class InMemoryQueueRepository(QueueRepository):
             if not entries:
                 return session
 
+            # Cek duplicate ID di dalam batch itu sendiri
+            batch_ids = [entry.id for entry in entries]
+            if len(batch_ids) != len(set(batch_ids)):
+                msg = "Terdapat QueueEntry.id duplikat di dalam batch append."
+                raise DuplicateQueueEntry(msg)
+
+            # Cek duplicate ID dengan antrean/current yang sudah ada di session
+            existing_ids = {e.id for e in session.upcoming}
+            if session.current_entry is not None:
+                existing_ids.add(session.current_entry.id)
+
             for entry in entries:
                 if entry.guild_id != guild_id:
                     msg = (
@@ -83,6 +97,12 @@ class InMemoryQueueRepository(QueueRepository):
                         f"tidak cocok dengan target guild {guild_id}."
                     )
                     raise GuildMismatch(msg)
+                if entry.id in existing_ids:
+                    msg = (
+                        f"QueueEntry dengan ID {entry.id} sudah ada dalam antrean "
+                        f"sesi guild {guild_id}."
+                    )
+                    raise DuplicateQueueEntry(msg)
 
             if len(session.upcoming) + len(entries) > self._max_queue_tracks:
                 msg = (
@@ -288,7 +308,7 @@ class InMemoryQueueRepository(QueueRepository):
                 )
                 raise VersionConflict(msg)
 
-            if not (0 <= volume <= 100):
+            if type(volume) is not int or not (0 <= volume <= 100):
                 msg = f"Volume {volume} berada di luar rentang sah (0 - 100)."
                 raise InvalidVolume(msg)
 
@@ -351,10 +371,25 @@ class InMemoryQueueRepository(QueueRepository):
             )
 
             # Validasi Channel IDs
-            if target_voice is not None and target_voice <= 0:
+            if target_voice is not None and (type(target_voice) is not int or target_voice <= 0):
                 raise ValueError("voice_channel_id harus integer positif (> 0).")
-            if target_text is not None and target_text <= 0:
+            if target_text is not None and (type(target_text) is not int or target_text <= 0):
                 raise ValueError("text_channel_id harus integer positif (> 0).")
+
+            # State and current_entry consistency
+            if (
+                target_state in (PlaybackState.PLAYING, PlaybackState.PAUSED)
+                and target_current is None
+            ):
+                msg = f"Status '{target_state.value}' wajib memiliki current_entry."
+                raise InvalidStateTransition(msg)
+            if (
+                target_state
+                in (PlaybackState.IDLE, PlaybackState.DISCONNECTED, PlaybackState.CONNECTING)
+                and target_current is not None
+            ):
+                msg = f"Status '{target_state.value}' wajib memiliki current_entry bernilai None."
+                raise InvalidStateTransition(msg)
 
             # Validasi Transisi State jika state berubah
             if target_state != session.state:
@@ -416,6 +451,36 @@ class InMemoryQueueRepository(QueueRepository):
                         f"tidak cocok dengan target guild {guild_id}."
                     )
                     raise GuildMismatch(msg)
+
+            # Uniqueness check on next_upcoming and next_current_entry
+            next_upcoming_ids = [e.id for e in transition.next_upcoming]
+            if len(next_upcoming_ids) != len(set(next_upcoming_ids)):
+                msg = "Terdapat QueueEntry.id duplikat dalam next_upcoming."
+                raise DuplicateQueueEntry(msg)
+            if (
+                transition.next_current_entry is not None
+                and transition.next_current_entry.id in set(next_upcoming_ids)
+            ):
+                msg = "next_current_entry.id muncul juga di dalam next_upcoming."
+                raise DuplicateQueueEntry(msg)
+
+            # State and current_entry consistency
+            if (
+                transition.next_state in (PlaybackState.PLAYING, PlaybackState.PAUSED)
+                and transition.next_current_entry is None
+            ):
+                msg = f"Status '{transition.next_state.value}' wajib memiliki current_entry."
+                raise InvalidStateTransition(msg)
+            if (
+                transition.next_state
+                in (PlaybackState.IDLE, PlaybackState.DISCONNECTED, PlaybackState.CONNECTING)
+                and transition.next_current_entry is not None
+            ):
+                msg = (
+                    f"Status '{transition.next_state.value}' wajib memiliki "
+                    "current_entry bernilai None."
+                )
+                raise InvalidStateTransition(msg)
 
             if len(transition.next_upcoming) > self._max_queue_tracks:
                 msg = (
