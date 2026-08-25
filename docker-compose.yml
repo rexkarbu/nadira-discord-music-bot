@@ -1,0 +1,33 @@
+name: nadira-discord-music-bot
+
+services:
+  lavalink:
+    image: ghcr.io/lavalink-devs/lavalink:4.2.2-alpine
+    container_name: nadira_lavalink
+    restart: unless-stopped
+    ports:
+      - "2333:2333"
+    environment:
+      - LAVALINK_SERVER_PASSWORD=${LAVALINK_PASSWORD:-youshallnotpass}
+      - _JAVA_OPTIONS=-Xmx512m -Xms256m
+    volumes:
+      - ./lavalink/application.yml:/opt/Lavalink/application.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider --header=\"Authorization: ${LAVALINK_PASSWORD:-youshallnotpass}\" http://127.0.0.1:2333/version || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nadira_bot_app
+    restart: unless-stopped
+    depends_on:
+      - lavalink
+    env_file:
+      - .env
+    environment:
+      - LAVALINK_URI=http://lavalink:2333
