@@ -6,13 +6,21 @@ import logging
 import math
 import random
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import discord
 import wavelink
 from discord.ext import commands
 
+from nadira_bot.application.concurrency import GuildOperationLockRegistry
+from nadira_bot.application.voice import VoiceSessionService
+from nadira_bot.infrastructure.repositories.memory import InMemoryQueueRepository
+from nadira_bot.infrastructure.voice.wavelink_gateway import WavelinkVoiceGateway
+from nadira_bot.presentation.command_tree import NadiraCommandTree
 from nadira_bot.settings import Settings
+
+if TYPE_CHECKING:
+    from nadira_bot.ports.repositories import QueueRepository
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +29,12 @@ class NadiraBot(commands.Bot):
     """Subclass Discord Bot utama (Nadira) yang mengelola lifecycle, commands, dan Lavalink."""
 
     def __init__(self, settings: Settings) -> None:
+        if settings.QUEUE_BACKEND == "redis":
+            raise RuntimeError(
+                "QUEUE_BACKEND=redis belum didukung pada Fase ini (tersedia di Fase 7). "
+                "Gunakan QUEUE_BACKEND=memory."
+            )
+
         # Konfigurasi intent minimum yang diperlukan: guilds dan voice_states
         # message_content secara eksplisit tidak diaktifkan demi privasi dan efisiensi
         intents = discord.Intents.default()
@@ -33,6 +47,7 @@ class NadiraBot(commands.Bot):
             intents=intents,
             application_id=settings.DISCORD_APPLICATION_ID,
             help_command=None,
+            tree_cls=NadiraCommandTree,
         )
 
         self.settings: Settings = settings
@@ -43,6 +58,18 @@ class NadiraBot(commands.Bot):
         self._reconnect_task: asyncio.Task[None] | None = None
         self._current_backoff_seconds: float = 5.0
 
+        # Wiring Application & Infrastructure Components
+        self.queue_repository: QueueRepository = InMemoryQueueRepository(
+            max_queue_tracks=settings.QUEUE_MAX_TRACKS
+        )
+        self.operation_lock_registry = GuildOperationLockRegistry()
+        self.voice_gateway = WavelinkVoiceGateway(bot=self)
+        self.voice_service = VoiceSessionService(
+            queue_repository=self.queue_repository,
+            voice_gateway=self.voice_gateway,
+            operation_locks=self.operation_lock_registry,
+        )
+
     async def setup_hook(self) -> None:
         """Lifecycle hook startup: memuat ekstensi, Lavalink, dan sync slash commands."""
         logger.info("Menjalankan setup hook Nadira bot...")
@@ -50,6 +77,9 @@ class NadiraBot(commands.Bot):
         # 1. Muat ekstensi / cog slash commands
         await self.load_extension("nadira_bot.commands.health")
         logger.info("Ekstensi slash command 'health' berhasil dimuat.")
+
+        await self.load_extension("nadira_bot.commands.voice")
+        logger.info("Ekstensi slash command 'voice' berhasil dimuat.")
 
         # 2. Inisialisasi koneksi awal ke Lavalink v4
         await self._init_lavalink()
@@ -156,7 +186,7 @@ class NadiraBot(commands.Bot):
                 # Jika masih DISCONNECTED, naikkan backoff
                 self._current_backoff_seconds = min(self._current_backoff_seconds * 2, max_backoff)
             except asyncio.CancelledError:
-                break
+                raise
             except Exception as err:
                 logger.debug(
                     "Supervisor Pool.reconnect() gagal, mencoba kembali nanti",
@@ -245,7 +275,7 @@ class NadiraBot(commands.Bot):
         }
 
     async def close(self) -> None:
-        """Graceful shutdown: membatalkan reconnect supervisor dan menutup pool Wavelink."""
+        """Graceful shutdown: menutup voice service, reconnect supervisor, dan pool Wavelink."""
         logger.info("Memulai proses graceful shutdown Nadira bot...")
 
         if self._reconnect_task and not self._reconnect_task.done():
@@ -254,13 +284,24 @@ class NadiraBot(commands.Bot):
                 await self._reconnect_task
 
         try:
+            await self.voice_service.shutdown()
+        except Exception as err:
+            logger.warning(
+                "Terjadi error saat shutdown voice_service",
+                extra={"error_type": type(err).__name__},
+            )
+
+        try:
             await wavelink.Pool.close()
             logger.info("Koneksi Wavelink pool berhasil ditutup.")
         except Exception as err:
             logger.warning(
                 "Terjadi error saat menutup Wavelink pool",
-                extra={"error": str(err)},
+                extra={"error_type": type(err).__name__},
             )
 
         await super().close()
+        if hasattr(self, "http") and hasattr(self.http, "close"):
+            with contextlib.suppress(Exception):
+                await self.http.close()
         logger.info("Proses bot Discord Nadira berhasil dihentikan secara bersih.")

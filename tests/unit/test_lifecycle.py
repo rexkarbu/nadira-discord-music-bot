@@ -51,6 +51,7 @@ async def test_command_sync_to_test_guild(valid_settings: Settings) -> None:
     bot = NadiraBot(valid_settings)
     try:
         with (
+            patch("wavelink.Node"),
             patch.object(bot, "load_extension", new_callable=AsyncMock),
             patch.object(bot.tree, "copy_global_to") as mock_copy_global,
             patch.object(bot.tree, "sync", new_callable=AsyncMock, return_value=[]) as mock_sync,
@@ -73,6 +74,7 @@ async def test_command_sync_global_fallback(valid_env_dict: dict[str, Any]) -> N
     bot = NadiraBot(settings)
     try:
         with (
+            patch("wavelink.Node"),
             patch.object(bot, "load_extension", new_callable=AsyncMock),
             patch.object(bot.tree, "copy_global_to") as mock_copy_global,
             patch.object(bot.tree, "sync", new_callable=AsyncMock, return_value=[]) as mock_sync,
@@ -202,3 +204,63 @@ def test_structured_json_logging_formatter() -> None:
     assert log_data["environment"] == "test-env"
     assert log_data["correlation_id"] == "corr-12345"
     assert "timestamp" in log_data
+
+
+def test_bot_startup_fails_with_redis_backend(valid_env_dict: dict[str, Any]) -> None:
+    """Memverifikasi startup bot gagal jika QUEUE_BACKEND=redis pada Fase ini."""
+    data = dict(valid_env_dict)
+    data["QUEUE_BACKEND"] = "redis"
+    data["REDIS_URL"] = "redis://localhost:6379/0"
+    settings = Settings(_env_file=None, **data)
+
+    with pytest.raises(RuntimeError, match="QUEUE_BACKEND=redis belum didukung pada Fase ini"):
+        NadiraBot(settings)
+
+
+@pytest.mark.asyncio
+async def test_reconnect_supervisor_cancellation_preserves_task_cancelled(
+    valid_settings: Settings,
+) -> None:
+    """Memverifikasi bahwa pembatalan reconnect task menandai task.cancelled() == True."""
+    bot = NadiraBot(valid_settings)
+    try:
+        bot._start_reconnect_supervisor()
+        task = bot._reconnect_task
+        assert task is not None
+        assert not task.done()
+
+        await bot.close()
+
+        assert task.done()
+        assert task.cancelled() is True
+    finally:
+        if not bot.is_closed():
+            await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_voice_service_shutdown_awaited_before_pool_close(
+    valid_settings: Settings,
+) -> None:
+    """Memverifikasi voice_service.shutdown dieksekusi sebelum wavelink.Pool.close."""
+    from unittest.mock import AsyncMock, patch
+
+    import wavelink
+
+    bot = NadiraBot(valid_settings)
+    call_order: list[str] = []
+    orig_pool_close = wavelink.Pool.close
+
+    async def mock_voice_shutdown() -> None:
+        call_order.append("VOICE_SHUTDOWN")
+
+    async def mock_pool_close() -> None:
+        call_order.append("POOL_CLOSE")
+        await orig_pool_close()
+
+    bot.voice_service.shutdown = AsyncMock(side_effect=mock_voice_shutdown)  # type: ignore[method-assign]
+
+    with patch.object(wavelink.Pool, "close", side_effect=mock_pool_close):
+        await bot.close()
+
+    assert call_order == ["VOICE_SHUTDOWN", "POOL_CLOSE"]

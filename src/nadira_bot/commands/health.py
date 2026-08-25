@@ -100,25 +100,17 @@ class HealthCog(commands.Cog):
     )
     async def health(self, interaction: discord.Interaction) -> None:
         """Menangani slash command /health dan merespons dengan embed status sistem."""
-        try:
-            health_data = self.bot.get_health_status()
-            embed = build_health_embed(health_data)
-            await interaction.response.send_message(embed=embed)
-            logger.info(
-                "Menjalankan slash command /health",
-                extra={
-                    "guild_id": interaction.guild_id,
-                    "user_id": interaction.user.id,
-                    "lavalink_connected": health_data.get("lavalink_connected", False),
-                },
-            )
-        except Exception:
-            logger.exception("Gagal memproses slash command /health")
-            if not interaction.response.is_done():
-                await interaction.response.send_message(
-                    "Terjadi kesalahan internal saat memeriksa status kesehatan sistem.",
-                    ephemeral=True,
-                )
+        health_data = self.bot.get_health_status()
+        embed = build_health_embed(health_data)
+        await interaction.response.send_message(embed=embed)
+        logger.info(
+            "Menjalankan slash command /health",
+            extra={
+                "guild_id": interaction.guild_id,
+                "user_id": interaction.user.id,
+                "lavalink_connected": health_data.get("lavalink_connected", False),
+            },
+        )
 
 
 async def setup(bot: "NadiraBot") -> None:
