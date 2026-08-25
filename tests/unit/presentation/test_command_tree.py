@@ -1,4 +1,4 @@
-"""Unit tests untuk NadiraCommandTree dan presentasi penanganan error."""
+"""Unit tests untuk IwedCommandTree dan presentasi penanganan error."""
 
 import logging
 import uuid
@@ -9,24 +9,24 @@ import discord
 import pytest
 from discord import app_commands
 
-from nadira_bot.application.errors import (
+from iwed_bot.application.errors import (
     BotMissingVoicePermission,
     UserNotInVoice,
     VoiceConnectionFailed,
 )
-from nadira_bot.presentation.command_tree import NadiraCommandTree
-from nadira_bot.presentation.interactions import unwrap_command_error
+from iwed_bot.presentation.command_tree import IwedCommandTree
+from iwed_bot.presentation.interactions import unwrap_command_error
 
 
 class DummyClient(discord.Client):
     pass
 
 
-class TestNadiraCommandTree:
+class TestIwedCommandTree:
     @pytest.mark.asyncio
     async def test_interaction_check_injects_correlation_id(self) -> None:
         client = DummyClient(intents=discord.Intents.default())
-        tree = NadiraCommandTree(client)
+        tree = IwedCommandTree(client)
 
         interaction = MagicMock(spec=discord.Interaction)
         interaction.extras = {}
@@ -40,7 +40,7 @@ class TestNadiraCommandTree:
     @pytest.mark.asyncio
     async def test_on_error_handles_typed_application_errors(self) -> None:
         client = DummyClient(intents=discord.Intents.default())
-        tree = NadiraCommandTree(client)
+        tree = IwedCommandTree(client)
 
         interaction = MagicMock(spec=discord.Interaction)
         interaction.extras = {"correlation_id": uuid.uuid4()}
@@ -68,7 +68,7 @@ class TestNadiraCommandTree:
     @pytest.mark.asyncio
     async def test_on_error_handles_unknown_exception_with_correlation_id(self) -> None:
         client = DummyClient(intents=discord.Intents.default())
-        tree = NadiraCommandTree(client)
+        tree = IwedCommandTree(client)
 
         corr_id = uuid.uuid4()
         interaction = MagicMock(spec=discord.Interaction)
@@ -94,7 +94,7 @@ class TestNadiraCommandTree:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         client = DummyClient(intents=discord.Intents.default())
-        tree = NadiraCommandTree(client)
+        tree = IwedCommandTree(client)
 
         corr_id = uuid.uuid4()
         interaction = MagicMock(spec=discord.Interaction)
@@ -127,8 +127,8 @@ class TestNadiraCommandTree:
         assert unwrapped is root_err
 
     def test_no_mojibake_or_unicode_corruption_in_source(self) -> None:
-        """Memverifikasi seluruh file di src/nadira_bot bebas dari pola mojibake/korup."""
-        src_dir = Path(__file__).resolve().parent.parent.parent.parent / "src" / "nadira_bot"
+        """Memverifikasi seluruh file di src/iwed_bot bebas dari pola mojibake/korup."""
+        src_dir = Path(__file__).resolve().parent.parent.parent.parent / "src" / "iwed_bot"
         assert src_dir.exists()
 
         forbidden_mojibake_patterns = [

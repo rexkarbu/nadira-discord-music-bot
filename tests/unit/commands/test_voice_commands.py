@@ -5,10 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 import discord
 import pytest
 
-from nadira_bot.application.errors import DifferentVoiceChannel
-from nadira_bot.commands.voice import VoiceCog
-from nadira_bot.domain.models import PlaybackState, VersionedGuildSession
-from nadira_bot.ports.voice import VoiceConnectionSnapshot
+from iwed_bot.application.errors import DifferentVoiceChannel
+from iwed_bot.commands.voice import VoiceCog
+from iwed_bot.domain.models import PlaybackState, VersionedGuildSession
+from iwed_bot.ports.voice import VoiceConnectionSnapshot
 
 
 class TestVoiceCog:
@@ -274,7 +274,7 @@ class TestVoiceCog:
             can_move_members=True,
         )
         assert (
-            "[BERHASIL] Memindahkan Nadira"
+            "[BERHASIL] Memindahkan Iwed"
             in interaction.edit_original_response.call_args[1]["content"]
         )
 

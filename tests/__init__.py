@@ -1,1 +1,1 @@
-"""Test suite package for Nadira Discord Music Bot."""
+"""Test suite package for Iwed Discord Music Bot."""

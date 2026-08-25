@@ -1,4 +1,4 @@
-"""Unit tests untuk domain models dan value objects Nadira."""
+"""Unit tests untuk domain models dan value objects Iwed."""
 
 import uuid
 from dataclasses import FrozenInstanceError
@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from nadira_bot.domain.models import (
+from iwed_bot.domain.models import (
     ALLOWED_STATE_TRANSITIONS,
     UNSET,
     PlaybackState,

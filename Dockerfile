@@ -27,20 +27,20 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM python:3.12-slim AS runner
 
 # Create non-root system user
-RUN groupadd -r nadirabot && useradd -r -g nadirabot -d /app -s /sbin/nologin nadirabot
+RUN groupadd -r iwedbot && useradd -r -g iwedbot -d /app -s /sbin/nologin iwedbot
 
 WORKDIR /app
 
 # Copy virtual environment and application from builder
-COPY --from=builder --chown=nadirabot:nadirabot /app/.venv /app/.venv
-COPY --from=builder --chown=nadirabot:nadirabot /app/src /app/src
+COPY --from=builder --chown=iwedbot:iwedbot /app/.venv /app/.venv
+COPY --from=builder --chown=iwedbot:iwedbot /app/src /app/src
 
 # Set environment paths
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-USER nadirabot
+USER iwedbot
 
-# Run Nadira Discord Music Bot
-CMD ["python", "-m", "nadira_bot"]
+# Run Iwed Discord Music Bot
+CMD ["python", "-m", "iwed_bot"]

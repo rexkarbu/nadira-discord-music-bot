@@ -1,4 +1,4 @@
-"""Unit tests untuk bot lifecycle, intents, observabilitas, dan supervisor Nadira."""
+"""Unit tests untuk bot lifecycle, intents, observabilitas, dan supervisor Iwed."""
 
 import asyncio
 import json
@@ -9,15 +9,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import wavelink
 
-from nadira_bot.bot import NadiraBot
-from nadira_bot.observability.logging import StructuredJsonFormatter
-from nadira_bot.settings import Settings
+from iwed_bot.bot import IwedBot
+from iwed_bot.observability.logging import StructuredJsonFormatter
+from iwed_bot.settings import Settings
 
 
 @pytest.mark.asyncio
 async def test_bot_intents_configuration(valid_settings: Settings) -> None:
     """Memverifikasi bahwa intent bot dikonfigurasi dan message_content dinonaktifkan."""
-    bot = NadiraBot(valid_settings)
+    bot = IwedBot(valid_settings)
     try:
         # Invariant: message_content HARUS bernilai False
         assert bot.intents.message_content is False
@@ -31,7 +31,7 @@ async def test_bot_intents_configuration(valid_settings: Settings) -> None:
 @pytest.mark.asyncio
 async def test_bot_health_status_structure(valid_settings: Settings) -> None:
     """Memverifikasi struktur data yang dihasilkan oleh get_health_status()."""
-    bot = NadiraBot(valid_settings)
+    bot = IwedBot(valid_settings)
     try:
         status = bot.get_health_status()
         assert isinstance(status["bot_status"], str)
@@ -48,7 +48,7 @@ async def test_bot_health_status_structure(valid_settings: Settings) -> None:
 @pytest.mark.asyncio
 async def test_command_sync_to_test_guild(valid_settings: Settings) -> None:
     """Memverifikasi sync commands ke test guild saat DISCORD_TEST_GUILD_ID disetel."""
-    bot = NadiraBot(valid_settings)
+    bot = IwedBot(valid_settings)
     try:
         with (
             patch("wavelink.Node"),
@@ -71,7 +71,7 @@ async def test_command_sync_global_fallback(valid_env_dict: dict[str, Any]) -> N
     data["DISCORD_TEST_GUILD_ID"] = None
     settings = Settings(_env_file=None, **data)
 
-    bot = NadiraBot(settings)
+    bot = IwedBot(settings)
     try:
         with (
             patch("wavelink.Node"),
@@ -90,7 +90,7 @@ async def test_command_sync_global_fallback(valid_env_dict: dict[str, Any]) -> N
 @pytest.mark.asyncio
 async def test_wavelink_mocked_lifecycle_events(valid_settings: Settings) -> None:
     """Memverifikasi event handler Wavelink ready dan disconnected memperbarui state."""
-    bot = NadiraBot(valid_settings)
+    bot = IwedBot(valid_settings)
     try:
         assert bot.lavalink_connected is False
         assert not bot._lavalink_ready_event.is_set()
@@ -120,7 +120,7 @@ async def test_reconnect_supervisor_no_duplicates_and_clean_close(
     valid_settings: Settings,
 ) -> None:
     """Memverifikasi bahwa supervisor tidak terduplikasi dan dibatalkan saat close()."""
-    bot = NadiraBot(valid_settings)
+    bot = IwedBot(valid_settings)
 
     try:
         bot._start_reconnect_supervisor()
@@ -146,7 +146,7 @@ async def test_reconnect_backoff_progression_when_node_disconnected(
     valid_settings: Settings,
 ) -> None:
     """Memverifikasi urutan peningkatan backoff meskipun Pool.reconnect() tidak throw exception."""
-    bot = NadiraBot(valid_settings)
+    bot = IwedBot(valid_settings)
     mock_node = MagicMock(spec=wavelink.Node)
     mock_node.status = wavelink.NodeStatus.DISCONNECTED
     bot._lavalink_node = mock_node
@@ -214,7 +214,7 @@ def test_bot_startup_fails_with_redis_backend(valid_env_dict: dict[str, Any]) ->
     settings = Settings(_env_file=None, **data)
 
     with pytest.raises(RuntimeError, match="QUEUE_BACKEND=redis belum didukung pada Fase ini"):
-        NadiraBot(settings)
+        IwedBot(settings)
 
 
 @pytest.mark.asyncio
@@ -222,7 +222,7 @@ async def test_reconnect_supervisor_cancellation_preserves_task_cancelled(
     valid_settings: Settings,
 ) -> None:
     """Memverifikasi bahwa pembatalan reconnect task menandai task.cancelled() == True."""
-    bot = NadiraBot(valid_settings)
+    bot = IwedBot(valid_settings)
     try:
         bot._start_reconnect_supervisor()
         task = bot._reconnect_task
@@ -247,7 +247,7 @@ async def test_voice_service_shutdown_awaited_before_pool_close(
 
     import wavelink
 
-    bot = NadiraBot(valid_settings)
+    bot = IwedBot(valid_settings)
     call_order: list[str] = []
     orig_pool_close = wavelink.Pool.close
 

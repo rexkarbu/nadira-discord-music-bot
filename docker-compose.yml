@@ -1,9 +1,9 @@
-name: nadira-discord-music-bot
+name: iwed-discord-music-bot
 
 services:
   lavalink:
     image: ghcr.io/lavalink-devs/lavalink:4.2.2-alpine
-    container_name: nadira_lavalink
+    container_name: iwed_lavalink
     restart: unless-stopped
     ports:
       - "2333:2333"
@@ -23,7 +23,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nadira_bot_app
+    container_name: iwed_bot_app
     restart: unless-stopped
     depends_on:
       - lavalink

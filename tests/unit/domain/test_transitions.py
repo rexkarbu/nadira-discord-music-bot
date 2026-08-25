@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from nadira_bot.domain.errors import InvalidStateTransition, StalePlaybackEvent
-from nadira_bot.domain.models import (
+from iwed_bot.domain.errors import InvalidStateTransition, StalePlaybackEvent
+from iwed_bot.domain.models import (
     LoopMode,
     PlaybackState,
     QueueEntry,
@@ -14,7 +14,7 @@ from nadira_bot.domain.models import (
     TrackReference,
     VersionedGuildSession,
 )
-from nadira_bot.domain.transitions import (
+from iwed_bot.domain.transitions import (
     compute_track_end_transition,
     validate_event_generation,
     validate_state_transition,

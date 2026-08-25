@@ -6,7 +6,7 @@ from pathlib import Path
 
 def test_domain_layer_has_zero_external_dependencies() -> None:
     domain_dir = (
-        Path(__file__).resolve().parent.parent.parent.parent / "src" / "nadira_bot" / "domain"
+        Path(__file__).resolve().parent.parent.parent.parent / "src" / "iwed_bot" / "domain"
     )
     assert domain_dir.exists()
     assert domain_dir.is_dir()
@@ -39,9 +39,7 @@ def test_domain_layer_has_zero_external_dependencies() -> None:
 
 
 def test_ports_layer_has_zero_discord_or_wavelink_dependencies() -> None:
-    ports_dir = (
-        Path(__file__).resolve().parent.parent.parent.parent / "src" / "nadira_bot" / "ports"
-    )
+    ports_dir = Path(__file__).resolve().parent.parent.parent.parent / "src" / "iwed_bot" / "ports"
     assert ports_dir.exists()
     assert ports_dir.is_dir()
 
@@ -65,7 +63,7 @@ def test_ports_layer_has_zero_discord_or_wavelink_dependencies() -> None:
 
 def test_application_layer_has_zero_discord_or_wavelink_dependencies() -> None:
     app_dir = (
-        Path(__file__).resolve().parent.parent.parent.parent / "src" / "nadira_bot" / "application"
+        Path(__file__).resolve().parent.parent.parent.parent / "src" / "iwed_bot" / "application"
     )
     assert app_dir.exists()
     assert app_dir.is_dir()

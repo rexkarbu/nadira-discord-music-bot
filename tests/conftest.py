@@ -1,10 +1,10 @@
-"""Pytest fixtures for Nadira Discord Music Bot test suite."""
+"""Pytest fixtures for Iwed Discord Music Bot test suite."""
 
 from typing import Any
 
 import pytest
 
-from nadira_bot.settings import Settings
+from iwed_bot.settings import Settings
 
 
 @pytest.fixture

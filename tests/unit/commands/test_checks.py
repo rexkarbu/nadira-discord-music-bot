@@ -5,14 +5,14 @@ from unittest.mock import MagicMock
 import discord
 import pytest
 
-from nadira_bot.application.errors import (
+from iwed_bot.application.errors import (
     BotMissingVoicePermission,
     GuildOnlyCommand,
     UnsupportedVoiceChannel,
     UserNotInVoice,
     VoiceChannelFull,
 )
-from nadira_bot.commands.checks import (
+from iwed_bot.commands.checks import (
     check_bot_voice_permissions,
     ensure_guild_context,
     ensure_user_in_voice,

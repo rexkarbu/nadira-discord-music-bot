@@ -1,11 +1,11 @@
-"""Unit tests untuk slash command /health dan embed status kesehatan Nadira."""
+"""Unit tests untuk slash command /health dan embed status kesehatan Iwed."""
 
 from typing import Any
 
 import discord
 import pytest
 
-from nadira_bot.commands.health import HealthCog, build_health_embed
+from iwed_bot.commands.health import HealthCog, build_health_embed
 
 
 def test_build_health_embed_when_lavalink_connected(sample_health_data: dict[str, Any]) -> None:
@@ -13,7 +13,7 @@ def test_build_health_embed_when_lavalink_connected(sample_health_data: dict[str
     embed = build_health_embed(sample_health_data)
 
     assert isinstance(embed, discord.Embed)
-    assert embed.title == "🏥 Status Kesehatan Sistem — Nadira"
+    assert embed.title == "🏥 Status Kesehatan Sistem — Iwed"
     assert embed.color == discord.Color.from_rgb(46, 204, 113)  # Hijau
 
     fields_dict: dict[str, str] = {
@@ -76,10 +76,10 @@ def test_health_embed_does_not_leak_secrets(sample_health_data: dict[str, Any]) 
 
 @pytest.mark.asyncio
 async def test_health_cog_initialization(valid_settings: Any) -> None:
-    """Memverifikasi inisialisasi HealthCog untuk Nadira."""
-    from nadira_bot.bot import NadiraBot
+    """Memverifikasi inisialisasi HealthCog untuk Iwed."""
+    from iwed_bot.bot import IwedBot
 
-    bot = NadiraBot(valid_settings)
+    bot = IwedBot(valid_settings)
     try:
         cog = HealthCog(bot)
         assert cog.bot is bot

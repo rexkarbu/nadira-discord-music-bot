@@ -6,12 +6,12 @@ import discord
 import pytest
 import wavelink
 
-from nadira_bot.application.errors import (
+from iwed_bot.application.errors import (
     UnexpectedVoiceClient,
     UnsupportedVoiceChannel,
     VoiceMoveFailed,
 )
-from nadira_bot.infrastructure.voice.wavelink_gateway import WavelinkVoiceGateway
+from iwed_bot.infrastructure.voice.wavelink_gateway import WavelinkVoiceGateway
 
 
 class TestWavelinkVoiceGateway:

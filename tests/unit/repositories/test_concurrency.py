@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from nadira_bot.domain.errors import VersionConflict
-from nadira_bot.domain.models import QueueEntry, SourceType, TrackReference
-from nadira_bot.infrastructure.concurrency import GuildLockRegistry
-from nadira_bot.infrastructure.repositories.memory import InMemoryQueueRepository
+from iwed_bot.domain.errors import VersionConflict
+from iwed_bot.domain.models import QueueEntry, SourceType, TrackReference
+from iwed_bot.infrastructure.concurrency import GuildLockRegistry
+from iwed_bot.infrastructure.repositories.memory import InMemoryQueueRepository
 
 
 def make_entry(guild_id: int, title: str) -> QueueEntry:

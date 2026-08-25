@@ -1,7 +1,7 @@
 """Concrete contract tests for InMemoryQueueRepository."""
 
-from nadira_bot.infrastructure.repositories.memory import InMemoryQueueRepository
-from nadira_bot.ports.repositories import QueueRepository
+from iwed_bot.infrastructure.repositories.memory import InMemoryQueueRepository
+from iwed_bot.ports.repositories import QueueRepository
 from tests.unit.repositories.test_repository_contract import BaseQueueRepositoryContractTests
 
 

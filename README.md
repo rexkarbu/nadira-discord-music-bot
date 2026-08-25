@@ -1,6 +1,6 @@
-# Nadira — Discord Music Bot (Fase 1: Foundation & Architecture)
+# Iwed — Discord Music Bot (Fase 1: Foundation & Architecture)
 
-**Nadira** adalah Discord Music Bot modern berbasis **Python 3.12**, **discord.py** (native application commands), **Wavelink 3.5.2**, dan node audio **Lavalink 4.2.2** (DAVE-compatible voice stack).
+**Iwed** adalah Discord Music Bot modern berbasis **Python 3.12**, **discord.py** (native application commands), **Wavelink 3.5.2**, dan node audio **Lavalink 4.2.2** (DAVE-compatible voice stack).
 
 ---
 
@@ -9,7 +9,7 @@
 Fase 1 membangun fondasi arsitektur, konfigurasi tersertifikasi, lifecycle bot, observabilitas terstruktur, serta integrasi node audio sebelum fitur playback diimplementasikan.
 
 ### Keputusan Teknis Utama
-- **Nama Bot & Package:** Nadira (`nadira_bot`, class utama `NadiraBot`).
+- **Nama Bot & Package:** Iwed (`iwed_bot`, class utama `IwedBot`).
 - **Runtime:** Python 3.12 dikelola via `uv`.
 - **Framework Bot:** `discord.py` v2.7.x menggunakan **native slash application commands** (`discord.app_commands`).
 - **Discord Intents:** `message_content` intent dinonaktifkan. Bot hanya meminta intent standar yang diperlukan (`guilds`, `voice_states`).
@@ -34,10 +34,10 @@ dc_music/
 │   ├── application.yml.example      # Template konfigurasi Lavalink v4
 │   └── application.yml              # Konfigurasi aktif (dibuat lokal, diabaikan Git)
 ├── src/
-│   └── nadira_bot/
+│   └── iwed_bot/
 │       ├── __init__.py              # Package metadata
 │       ├── __main__.py              # Application entrypoint & signal handling
-│       ├── bot.py                   # NadiraBot subclass & lifecycle supervisor
+│       ├── bot.py                   # IwedBot subclass & lifecycle supervisor
 │       ├── settings.py              # Pydantic v2 settings & strict validation
 │       ├── commands/
 │       │   ├── __init__.py
@@ -109,7 +109,7 @@ docker compose ps
 ### Langkah 4: Menjalankan Bot
 Jalankan bot menggunakan `uv`:
 ```powershell
-uv run python -m nadira_bot
+uv run python -m iwed_bot
 ```
 
 Saat bot berhasil login, Anda akan melihat log terstruktur dalam format JSON dan slash command `/health` siap digunakan.
@@ -152,6 +152,6 @@ uv run pytest -v -m integration
 
 | Command | Deskripsi | Respons |
 |---|---|---|
-| `/health` | Memeriksa status kesehatan Nadira bot, latensi Discord, status node Lavalink, uptime, dan mode startup. | Discord Embed (Bahasa Indonesia) |
+| `/health` | Memeriksa status kesehatan Iwed bot, latensi Discord, status node Lavalink, uptime, dan mode startup. | Discord Embed (Bahasa Indonesia) |
 
 > **Catatan:** Fitur playback musik (`/play`, `/skip`, `/queue`, integrasi Spotify/YouTube) belum ada pada fase ini dan akan diimplementasikan pada Fase 2 hingga Fase 5.

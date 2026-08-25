@@ -1,11 +1,11 @@
-"""Unit tests untuk modul settings dan validasi environment variables Nadira."""
+"""Unit tests untuk modul settings dan validasi environment variables Iwed."""
 
 from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
-from nadira_bot.settings import Settings
+from iwed_bot.settings import Settings
 
 
 def test_valid_settings_creation(valid_env_dict: dict[str, Any]) -> None:

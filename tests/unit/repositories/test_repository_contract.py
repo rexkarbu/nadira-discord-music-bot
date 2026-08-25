@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from nadira_bot.domain.errors import (
+from iwed_bot.domain.errors import (
     DuplicateQueueEntry,
     GuildMismatch,
     InvalidStateTransition,
@@ -19,7 +19,7 @@ from nadira_bot.domain.errors import (
     QueuePositionOutOfRange,
     VersionConflict,
 )
-from nadira_bot.domain.models import (
+from iwed_bot.domain.models import (
     LoopMode,
     PlaybackState,
     PlaybackTransition,
@@ -28,7 +28,7 @@ from nadira_bot.domain.models import (
     SourceType,
     TrackReference,
 )
-from nadira_bot.ports.repositories import QueueRepository
+from iwed_bot.ports.repositories import QueueRepository
 
 
 def make_track(title: str = "Track", duration_ms: int | None = 180000) -> TrackReference:

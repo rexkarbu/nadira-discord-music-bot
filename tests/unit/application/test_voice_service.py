@@ -6,23 +6,23 @@ from typing import Any
 
 import pytest
 
-from nadira_bot.application.errors import (
+from iwed_bot.application.errors import (
     DifferentVoiceChannel,
     LavalinkUnavailable,
     UserNotInVoice,
     VoiceConnectionFailed,
     VoiceDisconnectFailed,
 )
-from nadira_bot.application.voice import VoiceSessionService
-from nadira_bot.domain.models import (
+from iwed_bot.application.voice import VoiceSessionService
+from iwed_bot.domain.models import (
     PlaybackState,
     QueueEntry,
     SessionStateUpdate,
     SourceType,
     TrackReference,
 )
-from nadira_bot.infrastructure.repositories.memory import InMemoryQueueRepository
-from nadira_bot.ports.voice import VoiceConnectionSnapshot, VoiceGateway
+from iwed_bot.infrastructure.repositories.memory import InMemoryQueueRepository
+from iwed_bot.ports.voice import VoiceConnectionSnapshot, VoiceGateway
 
 
 class FakeVoiceGateway(VoiceGateway):
@@ -347,7 +347,7 @@ class TestVoiceSessionServiceStop:
         await repo.claim_next(100, expected_version=3)  # PLAYING, current=e1, upcoming=(e2,)
 
         # Sesi dalam keadaan STOPPING dengan upcoming tersisa
-        from nadira_bot.domain.models import PlaybackTransition
+        from iwed_bot.domain.models import PlaybackTransition
 
         await repo.apply_playback_transition(
             100,
