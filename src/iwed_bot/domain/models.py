@@ -54,7 +54,12 @@ ALLOWED_STATE_TRANSITIONS: dict[PlaybackState, frozenset[PlaybackState]] = {
         }
     ),
     PlaybackState.PAUSED: frozenset(
-        {PlaybackState.PLAYING, PlaybackState.STOPPING, PlaybackState.DISCONNECTED}
+        {
+            PlaybackState.PLAYING,
+            PlaybackState.IDLE,
+            PlaybackState.STOPPING,
+            PlaybackState.DISCONNECTED,
+        }
     ),
     PlaybackState.STOPPING: frozenset({PlaybackState.IDLE, PlaybackState.DISCONNECTED}),
 }

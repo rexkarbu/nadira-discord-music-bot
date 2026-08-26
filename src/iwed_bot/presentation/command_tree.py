@@ -47,7 +47,6 @@ class IwedCommandTree(app_commands.CommandTree):
                     "user_id": interaction.user.id,
                     "command_name": interaction.command.name if interaction.command else None,
                     "error_type": type(original_error).__name__,
-                    "error_message": str(original_error),
                 },
             )
         else:

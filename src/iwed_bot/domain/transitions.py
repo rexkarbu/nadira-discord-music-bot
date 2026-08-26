@@ -143,3 +143,123 @@ def compute_track_end_transition(
                 next_state=PlaybackState.PLAYING,
                 increment_generation=True,
             )
+
+
+def compute_manual_skip_transition(
+    session: VersionedGuildSession, count: int = 1
+) -> PlaybackTransition:
+    """Menghitung PlaybackTransition murni untuk aksi manual skip.
+
+    Semantik Manual Skip:
+    1. Membuang current_entry dan hingga (count - 1) lagu terdepan pada antrean upcoming.
+    2. Lagu yang dilewati TIDAK PERNAH dimasukkan kembali ke antrean, terlepas dari
+       apakah LoopMode.TRACK atau LoopMode.QUEUE sedang aktif.
+    3. Jika masih ada sisa lagu pada upcoming setelah dilewati, lagu pertama menjadi
+       next_current_entry dan state menjadi PLAYING.
+    4. Jika sisa antrean habis, next_current_entry menjadi None dan state menjadi IDLE.
+    5. increment_generation selalu bernilai True agar membatalkan event playback lama.
+
+    Raises:
+        InvalidStateTransition: Jika current_entry bernilai None atau state bukan PLAYING/PAUSED.
+        ValueError: Jika count < 1.
+    """
+    if count < 1:
+        raise ValueError(f"Jumlah skip harus minimal 1, diberikan: {count}.")
+
+    if session.current_entry is None:
+        msg = (
+            "Tidak dapat melakukan manual skip karena session.current_entry "
+            "bernilai None (tidak ada lagu yang sedang diputar)."
+        )
+        raise InvalidStateTransition(msg)
+
+    if session.state not in (PlaybackState.PLAYING, PlaybackState.PAUSED):
+        msg = (
+            f"compute_manual_skip_transition hanya sah saat status PLAYING atau PAUSED, "
+            f"status saat ini: '{session.state.value}'."
+        )
+        raise InvalidStateTransition(msg)
+
+    upcoming = session.upcoming
+    skip_from_upcoming = min(count - 1, len(upcoming))
+    remaining_upcoming = upcoming[skip_from_upcoming:]
+
+    if remaining_upcoming:
+        return PlaybackTransition(
+            next_current_entry=remaining_upcoming[0],
+            next_upcoming=remaining_upcoming[1:],
+            next_state=PlaybackState.PLAYING,
+            increment_generation=True,
+        )
+
+    return PlaybackTransition(
+        next_current_entry=None,
+        next_upcoming=(),
+        next_state=PlaybackState.IDLE,
+        increment_generation=True,
+    )
+
+
+def compute_track_failure_transition(
+    session: VersionedGuildSession,
+    event_generation: int,
+    *,
+    halt: bool = False,
+) -> PlaybackTransition:
+    """Menghitung PlaybackTransition murni ketika terjadi kegagalan pemutaran track.
+
+    Semantik Failure Transition:
+    1. current_entry yang rusak dibuang dan TIDAK PERNAH dimasukkan ulang ke antrean
+       (mengabaikan LoopMode.TRACK dan LoopMode.QUEUE).
+    2. Jika halt=True (safety cap kegagalan beruntun tercapai):
+       - next_current_entry = None
+       - next_upcoming = session.upcoming (seluruh sisa lagu yang belum dicoba DIPERTAHANKAN)
+       - next_state = PlaybackState.IDLE
+       - increment_generation = True
+    3. Jika halt=False:
+       - Mengambil upcoming[0] sebagai next_current_entry (state PLAYING) jika ada,
+         atau next_current_entry = None (state IDLE) jika antrean habis.
+       - increment_generation = True
+
+    Raises:
+        InvalidStateTransition: Jika current_entry bernilai None atau state bukan PLAYING/PAUSED.
+        StalePlaybackEvent: Jika event_generation tidak cocok.
+    """
+    if session.current_entry is None:
+        msg = (
+            "Tidak dapat menghitung failure transition karena session.current_entry bernilai None."
+        )
+        raise InvalidStateTransition(msg)
+
+    if session.state not in (PlaybackState.PLAYING, PlaybackState.PAUSED):
+        msg = (
+            f"compute_track_failure_transition hanya sah saat status PLAYING atau PAUSED, "
+            f"status saat ini: '{session.state.value}'."
+        )
+        raise InvalidStateTransition(msg)
+
+    validate_event_generation(session, event_generation)
+
+    if halt:
+        return PlaybackTransition(
+            next_current_entry=None,
+            next_upcoming=session.upcoming,
+            next_state=PlaybackState.IDLE,
+            increment_generation=True,
+        )
+
+    upcoming = session.upcoming
+    if upcoming:
+        return PlaybackTransition(
+            next_current_entry=upcoming[0],
+            next_upcoming=upcoming[1:],
+            next_state=PlaybackState.PLAYING,
+            increment_generation=True,
+        )
+
+    return PlaybackTransition(
+        next_current_entry=None,
+        next_upcoming=(),
+        next_state=PlaybackState.IDLE,
+        increment_generation=True,
+    )

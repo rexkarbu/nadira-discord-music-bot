@@ -8,13 +8,26 @@ import discord
 from discord import app_commands
 
 from iwed_bot.application.errors import (
+    AlreadyPaused,
     BotMissingVoicePermission,
+    CompliantSourceUnavailable,
     ConcurrentVoiceOperation,
     DifferentVoiceChannel,
     GuildOnlyCommand,
+    InvalidPlayQuery,
     IwedApplicationError,
     LavalinkUnavailable,
+    NothingPlaying,
+    NotPaused,
+    PlaybackFailed,
+    PlaylistImportDeferred,
+    QueuePageOutOfRange,
+    SourceLoadFailed,
+    SourceTimeout,
+    SpotifySourceDeferred,
+    TrackNotFound,
     UnexpectedVoiceClient,
+    UnsupportedSource,
     UnsupportedVoiceChannel,
     UserNotInVoice,
     VoiceChannelFull,
@@ -36,6 +49,35 @@ from iwed_bot.domain.errors import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def safe_truncate(text: str, max_length: int, suffix: str = "...") -> str:
+    """Memotong string secara aman jika melebihi batas panjang maksimum."""
+    if not text:
+        return ""
+    if len(text) <= max_length:
+        return text
+    cut = max(0, max_length - len(suffix))
+    return text[:cut] + suffix
+
+
+def escape_markdown(text: str) -> str:
+    """Membersihkan karakter markdown Discord yang berpotensi merusak embed."""
+    if not text:
+        return ""
+    return discord.utils.escape_markdown(text)
+
+
+def format_duration(duration_ms: int | None, is_stream: bool = False) -> str:
+    """Memformat durasi ms menjadi representasi MM:SS atau LIVE."""
+    if is_stream or duration_ms is None:
+        return "LIVE"
+    total_seconds = max(0, duration_ms // 1000)
+    minutes, seconds = divmod(total_seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours > 0:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes:02d}:{seconds:02d}"
 
 
 def unwrap_command_error(error: BaseException) -> BaseException:
@@ -91,6 +133,44 @@ def format_user_error_message(error: BaseException, correlation_id: uuid.UUID) -
     if isinstance(error, ConcurrentVoiceOperation):
         return "[WAIT] Operasi voice lain sedang berlangsung. Silakan coba sesaat lagi."
 
+    # Phase 4 typed errors
+    if isinstance(error, SourceLoadFailed):
+        return (
+            "[ERROR] Gagal memuat audio dari sumber penyedia. "
+            "Silakan coba lagu lain atau ulangi sesaat lagi."
+        )
+
+    if isinstance(
+        error,
+        (
+            InvalidPlayQuery,
+            UnsupportedSource,
+            TrackNotFound,
+            SourceTimeout,
+            QueuePageOutOfRange,
+        ),
+    ):
+        return f"[ERROR] {error}"
+
+    if isinstance(
+        error,
+        (
+            PlaylistImportDeferred,
+            SpotifySourceDeferred,
+            CompliantSourceUnavailable,
+            NothingPlaying,
+            AlreadyPaused,
+            NotPaused,
+        ),
+    ):
+        return f"[INFO] {error}"
+
+    if isinstance(error, PlaybackFailed):
+        return (
+            "[ERROR] Terjadi kegagalan pada layanan audio saat memutar lagu. "
+            f"ID laporan: `{correlation_id}`"
+        )
+
     if isinstance(
         error,
         (QueueEmpty, QueueFull, QueuePositionOutOfRange, DuplicateQueueEntry),
@@ -121,13 +201,15 @@ def format_user_error_message(error: BaseException, correlation_id: uuid.UUID) -
 
 async def respond_or_edit(
     interaction: discord.Interaction,
-    content: str,
+    content: str | None = None,
     *,
     embed: discord.Embed | None = None,
     ephemeral: bool = True,
 ) -> Any:
     """Mengirim respons interaksi dengan penanganan status deferred/responded yang aman."""
-    send_kwargs: dict[str, Any] = {"content": content, "ephemeral": ephemeral}
+    send_kwargs: dict[str, Any] = {"ephemeral": ephemeral}
+    if content is not None:
+        send_kwargs["content"] = content
     if embed is not None:
         send_kwargs["embed"] = embed
 

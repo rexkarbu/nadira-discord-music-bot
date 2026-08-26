@@ -41,11 +41,15 @@ class InMemoryQueueRepository(QueueRepository):
     def __init__(
         self,
         max_queue_tracks: int = 1000,
+        default_volume: int = 70,
         lock_registry: GuildLockRegistry | None = None,
     ) -> None:
         if type(max_queue_tracks) is not int or max_queue_tracks <= 0:
             raise ValueError("max_queue_tracks harus integer positif (> 0).")
+        if type(default_volume) is not int or not (0 <= default_volume <= 100):
+            raise ValueError("default_volume harus integer antara 0 dan 100.")
         self._max_queue_tracks = max_queue_tracks
+        self._default_volume = default_volume
         self._lock_registry = lock_registry or GuildLockRegistry()
         self._sessions: dict[int, VersionedGuildSession] = {}
 
@@ -57,6 +61,7 @@ class InMemoryQueueRepository(QueueRepository):
                 session = VersionedGuildSession(
                     guild_id=guild_id,
                     version=0,
+                    volume=self._default_volume,
                     state=PlaybackState.DISCONNECTED,
                 )
                 self._sessions[guild_id] = session
@@ -530,6 +535,7 @@ class InMemoryQueueRepository(QueueRepository):
             session = VersionedGuildSession(
                 guild_id=guild_id,
                 version=0,
+                volume=self._default_volume,
                 state=PlaybackState.DISCONNECTED,
             )
             self._sessions[guild_id] = session

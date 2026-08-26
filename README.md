@@ -1,12 +1,12 @@
-# Iwed — Discord Music Bot (Fase 1: Foundation & Architecture)
+# Iwed — Discord Music Bot
 
 **Iwed** adalah Discord Music Bot modern berbasis **Python 3.12**, **discord.py** (native application commands), **Wavelink 3.5.2**, dan node audio **Lavalink 4.2.2** (DAVE-compatible voice stack).
 
 ---
 
-## 1. Ikhtisar Arsitektur Fase 1
+## 1. Ikhtisar Arsitektur Iwed
 
-Fase 1 membangun fondasi arsitektur, konfigurasi tersertifikasi, lifecycle bot, observabilitas terstruktur, serta integrasi node audio sebelum fitur playback diimplementasikan.
+Iwed dibangun dengan Clean Architecture berlapis (Domain, Ports, Application, Infrastructure, Presentation) yang memastikan integritas antrean terisolasi dari kegagalan jaringan atau node audio.
 
 ### Keputusan Teknis Utama
 - **Nama Bot & Package:** Iwed (`iwed_bot`, class utama `IwedBot`).
@@ -14,7 +14,7 @@ Fase 1 membangun fondasi arsitektur, konfigurasi tersertifikasi, lifecycle bot, 
 - **Framework Bot:** `discord.py` v2.7.x menggunakan **native slash application commands** (`discord.app_commands`).
 - **Discord Intents:** `message_content` intent dinonaktifkan. Bot hanya meminta intent standar yang diperlukan (`guilds`, `voice_states`).
 - **Audio Client & Node:** Wavelink `3.5.2` terhubung ke container Lavalink `4.2.2-alpine` melalui Docker Compose.
-- **Startup Failure Policy:** Validasi ketat untuk kredensial Discord (fail fast). Koneksi Lavalink bersifat *degraded startup* (bot tetap online dan mencoba reconnect dengan supervisor backoff terukur jika Lavalink belum siap).
+- **Queue Source of Truth:** Domain queue session murni (`VersionedGuildSession`), bukan player internal cache Wavelink.
 - **Quality Gates:** 100% lulus linting (`ruff`), type checking (`pyright`), testing offline (`pytest -m "not integration"`), dan validasi Docker Compose.
 
 ---
@@ -39,23 +39,33 @@ dc_music/
 │       ├── __main__.py              # Application entrypoint & signal handling
 │       ├── bot.py                   # IwedBot subclass & lifecycle supervisor
 │       ├── settings.py              # Pydantic v2 settings & strict validation
-│       ├── commands/
-│       │   ├── __init__.py
-│       │   └── health.py            # Slash command /health
-│       └── observability/
-│           ├── __init__.py
-│           └── logging.py           # Structured JSON logging
+│       ├── application/             # Application services & use cases
+│       │   ├── concurrency.py       # Per-guild locking & runner registries
+│       │   ├── errors.py            # Typed application errors
+│       │   ├── play_service.py      # PlayRequestService
+│       │   ├── playback_coordinator.py # PlaybackCoordinator (one-shot runner)
+│       │   ├── queue_control.py     # QueueControlService (skip, pause, resume, queue)
+│       │   ├── source_router.py     # URL classification & query sanitization
+│       │   └── voice.py             # VoiceSessionService
+│       ├── domain/                  # Pure immutable domain models & transitions
+│       │   ├── errors.py            # Typed domain errors
+│       │   ├── models.py            # VersionedGuildSession, QueueEntry, TrackReference
+│       │   └── transitions.py       # Pure state transitions (track_end, skip, failure)
+│       ├── ports/                   # Protocol interfaces (Gateway, Repository, Source)
+│       ├── infrastructure/          # Adapters (Wavelink, Memory, YouTube Prototype)
+│       │   ├── playback/            # WavelinkPlaybackGateway & metadata parser
+│       │   ├── repositories/        # InMemoryQueueRepository
+│       │   ├── sources/             # TrackSource adapters (prototype & compliance)
+│       │   └── voice/               # WavelinkVoiceGateway
+│       └── presentation/            # Discord Presentation layer
+│           ├── command_tree.py      # IwedCommandTree & central error handler
+│           ├── discord_notifier.py  # DiscordPlaybackNotifier
+│           ├── formatting.py        # Progress bars & duration helpers
+│           └── interactions.py      # Interaction responders & error translators
 └── tests/
-    ├── __init__.py
     ├── conftest.py                  # Pytest fixtures & mock objects
-    ├── unit/
-    │   ├── __init__.py
-    │   ├── test_settings.py         # Pengujian validasi settings & secret masking
-    │   ├── test_health.py           # Pengujian slash command /health
-    │   └── test_lifecycle.py        # Pengujian intent, lifecycle, & supervisor
-    └── integration/
-        ├── __init__.py
-        └── test_lavalink_integration.py # Pengujian koneksi real Lavalink container
+    ├── unit/                        # Unit testing (100% offline deterministic)
+    └── integration/                 # Live container & YouTube integration tests
 ```
 
 ---
@@ -93,8 +103,7 @@ Buka file `.env` dan ganti nilai-nilai kredensial berikut dengan data bot Anda:
 - `DISCORD_TEST_GUILD_ID`: (Opsional) Server ID Discord untuk instant command sync saat development.
 - `LAVALINK_URI`: Gunakan `http://localhost:2333` untuk development lokal di host.
 - `LAVALINK_PASSWORD`: Password node Lavalink (default: `youshallnotpass`).
-
-> **Catatan Fail-Fast:** Jika `.env` belum dibuat atau `DISCORD_TOKEN`/`DISCORD_APPLICATION_ID` dikosongkan, bot akan gagal startup dengan log level `CRITICAL` berformat JSON dan exit code `1`.
+- `SOURCE_POLICY_MODE`: `prototype` untuk live testing YouTube, atau `compliance-first` untuk restricted mode.
 
 ### Langkah 3: Menjalankan Lavalink v4
 Jalankan node Lavalink menggunakan Docker Compose:
@@ -112,8 +121,6 @@ Jalankan bot menggunakan `uv`:
 uv run python -m iwed_bot
 ```
 
-Saat bot berhasil login, Anda akan melihat log terstruktur dalam format JSON dan slash command `/health` siap digunakan.
-
 ---
 
 ## 5. Menjalankan Quality Gates
@@ -122,16 +129,22 @@ Saat bot berhasil login, Anda akan melihat log terstruktur dalam format JSON dan
 Jalankan seluruh suite verifikasi kualitas kode:
 
 ```powershell
-# 1. Linting kode dengan Ruff
+# 1. Dependency lock check
+uv lock --check
+
+# 2. Frozen sync verification
+uv sync --frozen
+
+# 3. Linting kode dengan Ruff
 uv run ruff check .
 
-# 2. Pengecekan formatting dengan Ruff
+# 4. Pengecekan formatting dengan Ruff
 uv run ruff format --check .
 
-# 3. Static Type Checking dengan Pyright
+# 5. Static Type Checking dengan Pyright
 uv run pyright
 
-# 4. Unit Testing (100% Offline)
+# 6. Unit Testing (100% Offline, Deterministic Barrier Tests)
 uv run pytest -v -m "not integration"
 ```
 
@@ -141,17 +154,47 @@ Setelah container Lavalink aktif:
 # 1. Validasi konfigurasi Docker Compose
 docker compose config
 
-# 2. Jalankan integration test terhadap container Lavalink
+# 2. Integration test Lavalink node & websocket
 $env:RUN_LAVALINK_INTEGRATION="1"
-uv run pytest -v -m integration
+uv run pytest -v tests/integration/test_lavalink_integration.py
+
+# 3. Live YouTube Source Resolution test (Memerlukan akses jaringan)
+$env:RUN_YOUTUBE_LIVE_INTEGRATION="1"
+uv run pytest -v tests/integration/test_youtube_source_integration.py
+
+# 4. Jalankan seluruh suite terpadu
+uv run pytest -v
 ```
 
 ---
 
-## 6. Slash Command yang Tersedia di Fase 1
+## 6. Slash Command yang Tersedia
 
-| Command | Deskripsi | Respons |
-|---|---|---|
-| `/health` | Memeriksa status kesehatan Iwed bot, latensi Discord, status node Lavalink, uptime, dan mode startup. | Discord Embed (Bahasa Indonesia) |
+| Command | Parameter | Deskripsi | Respons |
+|---|---|---|---|
+| `/health` | - | Memeriksa status kesehatan Iwed bot, latensi Discord, status node Lavalink, uptime, dan mode startup. | Discord Embed (Bahasa Indonesia) |
+| `/join` | - | Menghubungkan Iwed ke voice channel pengguna atau memindahkan jika memiliki izin. | Ephemeral Message |
+| `/stop` | - | Menghentikan pemutaran musik, mengosongkan antrean, dan memutuskan bot dari voice channel. | Ephemeral Message |
+| `/play` | `query` (Wajib) | Mencari judul lagu di YouTube Music atau me-resolve URL video tunggal YouTube, lalu memasukkan ke antrean / memutar. | Discord Embed (Public) |
+| `/skip` | `count` (Opsional, default: 1) | Melewati lagu yang sedang diputar atau beberapa lagu sekaligus (1-25) ke lagu berikutnya. | Discord Embed (Public) |
+| `/pause` | - | Menjeda pemutaran musik fisik saat ini. | Discord Embed (Public) |
+| `/resume` | - | Melanjutkan pemutaran musik yang sedang dijeda. | Discord Embed (Public) |
+| `/queue` | `page` (Opsional, default: 1) | Menampilkan lagu yang sedang diputar dan daftar antrean berikutnya (10 lagu per halaman). | Discord Embed (Public) |
+| `/nowplaying` | - | Menampilkan detail informasi dan progress bar lagu yang sedang diputar. | Discord Embed (Public) |
 
-> **Catatan:** Fitur playback musik (`/play`, `/skip`, `/queue`, integrasi Spotify/YouTube) belum ada pada fase ini dan akan diimplementasikan pada Fase 2 hingga Fase 5.
+---
+
+## 7. Prosedur Uji Manual Voice & Playback (Smoke Test)
+
+Untuk memvalidasi integrasi real voice channel di server Discord:
+1. Pastikan Lavalink berjalan (`docker compose up -d lavalink`) dan bot online (`uv run python -m iwed_bot`).
+2. Masuk ke salah satu voice channel di Discord.
+3. Jalankan `/join` -> Pastikan bot masuk ke voice channel.
+4. Jalankan `/play query: lofi hip hop` -> Pastikan lagu mulai berbunyi dan embed muncul.
+5. Jalankan `/pause` -> Lagu terjeda.
+6. Jalankan `/resume` -> Lagu melanjutkan pemutaran.
+7. Jalankan `/nowplaying` -> Embed menampilkan progres waktu dan status memutar.
+8. Jalankan `/play query: https://www.youtube.com/watch?v=dQw4w9WgXcQ` -> Lagu kedua masuk ke antrean.
+9. Jalankan `/queue` -> Menampilkan lagu saat ini dan lagu kedua di antrean.
+10. Jalankan `/skip` -> Lagu pertama berhenti dan lagu kedua langsung diputar.
+11. Jalankan `/stop` -> Pemutaran berhenti, antrean bersih, dan bot keluar dari voice channel.

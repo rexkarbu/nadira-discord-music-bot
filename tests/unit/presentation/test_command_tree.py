@@ -118,6 +118,61 @@ class TestIwedCommandTree:
         for record in caplog.records:
             assert "super_secret_password" not in record.getMessage()
 
+    @pytest.mark.asyncio
+    async def test_vendor_exception_with_credentialed_url_does_not_leak(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Memastikan vendor error bervalue credential tidak bocor ke respons Discord."""
+        from iwed_bot.application.errors import SourceLoadFailed
+
+        client = DummyClient(intents=discord.Intents.default())
+        tree = IwedCommandTree(client)
+
+        corr_id = uuid.uuid4()
+        interaction = MagicMock(spec=discord.Interaction)
+        interaction.extras = {"correlation_id": corr_id}
+        interaction.response = MagicMock()
+        interaction.response.is_done.return_value = True
+        interaction.edit_original_response = AsyncMock()
+
+        secret_vendor_err = RuntimeError(
+            "HTTP 403 on https://user:secret_token_abc123@api.vendor.com/stream?auth_key=xyz999"
+        )
+        typed_err = SourceLoadFailed("Gagal memuat audio dari sumber penyedia.")
+        typed_err.__cause__ = secret_vendor_err
+
+        err = app_commands.CommandInvokeError(MagicMock(), typed_err)
+
+        with caplog.at_level(logging.WARNING):
+            await tree.on_error(interaction, err)
+
+        call_content = interaction.edit_original_response.call_args[1]["content"]
+        # Pesan ke Discord wajib pesan konstan
+        expected_msg = (
+            "[ERROR] Gagal memuat audio dari sumber penyedia. "
+            "Silakan coba lagu lain atau ulangi sesaat lagi."
+        )
+        assert call_content == expected_msg
+        assert "secret_token_abc123" not in call_content
+        assert "xyz999" not in call_content
+
+        # Verifikasi log tidak mencetak raw message vendor yang mengandung token
+        for record in caplog.records:
+            assert "secret_token_abc123" not in record.getMessage()
+            assert "xyz999" not in record.getMessage()
+
+    def test_source_load_failed_maps_to_constant_user_message(self) -> None:
+        from iwed_bot.application.errors import SourceLoadFailed
+        from iwed_bot.presentation.interactions import format_user_error_message
+
+        err = SourceLoadFailed("Some arbitrary vendor error string")
+        msg = format_user_error_message(err, uuid.uuid4())
+        expected_msg = (
+            "[ERROR] Gagal memuat audio dari sumber penyedia. "
+            "Silakan coba lagu lain atau ulangi sesaat lagi."
+        )
+        assert msg == expected_msg
+
     def test_unwrap_command_error(self) -> None:
         root_err = ValueError("Root error")
         wrapped_1 = app_commands.CommandInvokeError(MagicMock(), root_err)

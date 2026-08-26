@@ -6,7 +6,8 @@ server:
 
 lavalink:
   plugins:
-    # Plugins (YouTube, LavaSrc, Spotify, etc.) are intentionally disabled for Phase 1
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
+      repository: "https://maven.lavalink.dev/releases"
 
   server:
     password: "${LAVALINK_SERVER_PASSWORD:youshallnotpass}"
@@ -40,6 +41,22 @@ lavalink:
     youtubeSearchEnabled: false
     soundcloudSearchEnabled: false
     gc-warnings: true
+
+plugins:
+  youtube:
+    enabled: true
+    allowSearch: true
+    allowDirectVideoIds: false
+    allowDirectPlaylistIds: false
+    clients:
+      - MUSIC
+      - ANDROID_VR
+      - WEB
+      - WEBEMBEDDED
+    # POT (Proof of Origin Token) jika diperlukan untuk non-commercial testing
+    # pot:
+    #   token: "example_pot_token"
+    #   visitorData: "example_visitor_data"
 
 metrics:
   prometheus:

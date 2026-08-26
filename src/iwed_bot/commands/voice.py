@@ -1,5 +1,6 @@
 """Slash commands /join dan /stop serta event listener voice state Iwed."""
 
+import inspect
 import logging
 from typing import TYPE_CHECKING
 
@@ -106,6 +107,12 @@ class VoiceCog(commands.Cog):
         ):
             requester_channel_id = interaction.user.voice.channel.id
 
+        coordinator = getattr(self.bot, "playback_coordinator", None)
+        if coordinator is not None and hasattr(coordinator, "cancel_runner"):
+            coro = coordinator.cancel_runner(guild.id)
+            if inspect.isawaitable(coro):
+                await coro
+
         _session, was_active = await self.bot.voice_service.stop(
             guild_id=guild.id,
             requester_channel_id=requester_channel_id,
@@ -143,6 +150,13 @@ class VoiceCog(commands.Cog):
         old_ch = before.channel.id if before.channel else None
         new_ch = after.channel.id if after.channel else None
         is_stage = isinstance(after.channel, discord.StageChannel)
+
+        if new_ch is None or is_stage:
+            coord = getattr(self.bot, "playback_coordinator", None)
+            if coord is not None and hasattr(coord, "cancel_runner"):
+                c = coord.cancel_runner(member.guild.id)
+                if inspect.isawaitable(c):
+                    await c
 
         try:
             await self.bot.voice_service.handle_voice_state_update(

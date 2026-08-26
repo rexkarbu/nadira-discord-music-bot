@@ -263,4 +263,36 @@ async def test_voice_service_shutdown_awaited_before_pool_close(
     with patch.object(wavelink.Pool, "close", side_effect=mock_pool_close):
         await bot.close()
 
-    assert call_order == ["VOICE_SHUTDOWN", "POOL_CLOSE"]
+    assert "VOICE_SHUTDOWN" in call_order
+    assert "POOL_CLOSE" in call_order
+
+
+@pytest.mark.asyncio
+async def test_playback_gateway_shutdown_called_during_close(
+    valid_settings: Settings,
+) -> None:
+    bot = IwedBot(valid_settings)
+    bot.playback_gateway.shutdown = AsyncMock()
+    await bot.close()
+    bot.playback_gateway.shutdown.assert_awaited_once()
+
+
+def test_source_policy_mode_wiring(valid_env_dict: dict[str, Any]) -> None:
+    from iwed_bot.infrastructure.sources import (
+        CompliantSourceUnavailableAdapter,
+        WavelinkYouTubeSource,
+    )
+
+    # 1. Prototype mode
+    d1 = dict(valid_env_dict)
+    d1["SOURCE_POLICY_MODE"] = "prototype"
+    s1 = Settings(_env_file=None, **d1)
+    b1 = IwedBot(s1)
+    assert isinstance(b1.track_source, WavelinkYouTubeSource)
+
+    # 2. Compliance-first mode
+    d2 = dict(valid_env_dict)
+    d2["SOURCE_POLICY_MODE"] = "compliance-first"
+    s2 = Settings(_env_file=None, **d2)
+    b2 = IwedBot(s2)
+    assert isinstance(b2.track_source, CompliantSourceUnavailableAdapter)

@@ -133,3 +133,181 @@ class ConcurrentVoiceOperation(IwedApplicationError):
         message: str = "Operasi voice lain sedang berlangsung pada server ini. Silakan coba lagi.",
     ) -> None:
         super().__init__(message)
+
+
+class InvalidPlayQuery(IwedApplicationError):
+    """Query pencarian atau URL /play tidak valid."""
+
+    def __init__(
+        self,
+        message: str = (
+            "Query pencarian tidak valid. Masukkan judul lagu atau "
+            "URL YouTube yang sah (1-500 karakter)."
+        ),
+    ) -> None:
+        super().__init__(message)
+
+
+class UnsupportedSource(IwedApplicationError):
+    """Sumber URL tidak didukung oleh bot pada fase ini."""
+
+    def __init__(
+        self,
+        message: str = (
+            "Sumber tautan tidak didukung. Iwed saat ini mendukung "
+            "pencarian teks dan URL video tunggal YouTube."
+        ),
+    ) -> None:
+        super().__init__(message)
+
+
+class PlaylistImportDeferred(IwedApplicationError):
+    """Tautan playlist terdeteksi tetapi import playlist baru didukung pada Fase 5."""
+
+    def __init__(
+        self,
+        message: str = (
+            "Tautan playlist terdeteksi. Fitur import playlist lengkap akan hadir pada Fase 5. "
+            "Untuk saat ini, silakan masukkan URL lagu tunggal."
+        ),
+    ) -> None:
+        super().__init__(message)
+
+
+class SpotifySourceDeferred(IwedApplicationError):
+    """Tautan Spotify terdeteksi tetapi integrasi Spotify baru didukung pada Fase 5."""
+
+    def __init__(
+        self,
+        message: str = (
+            "Tautan Spotify terdeteksi. "
+            "Dukungan integrasi metadata Spotify akan tersedia pada Fase 5."
+        ),
+    ) -> None:
+        super().__init__(message)
+
+
+class TrackNotFound(IwedApplicationError):
+    """Lagu tidak ditemukan pada penyedia audio."""
+
+    def __init__(
+        self,
+        message: str = (
+            "Lagu tidak ditemukan. Coba gunakan kata kunci pencarian yang lebih spesifik."
+        ),
+    ) -> None:
+        super().__init__(message)
+
+
+class SourceLoadFailed(IwedApplicationError):
+    """Gagal memuat audio dari penyedia sumber."""
+
+    def __init__(
+        self,
+        message: str = (
+            "Gagal memuat audio dari sumber penyedia. "
+            "Silakan coba lagu lain atau ulangi sesaat lagi."
+        ),
+    ) -> None:
+        super().__init__(message)
+
+
+class SourceTimeout(IwedApplicationError):
+    """Waktu pencarian lagu habis (timeout)."""
+
+    def __init__(
+        self,
+        message: str = (
+            "Waktu pencarian lagu habis (timeout). Silakan periksa koneksi atau coba sesaat lagi."
+        ),
+    ) -> None:
+        super().__init__(message)
+
+
+class PlaybackFailed(IwedApplicationError):
+    """Kegagalan memulai pemutaran audio di node Lavalink."""
+
+    def __init__(
+        self,
+        message: str = "Terjadi kegagalan pada layanan audio saat memutar lagu.",
+    ) -> None:
+        super().__init__(message)
+
+
+class NothingPlaying(IwedApplicationError):
+    """Operasi kontrol antrean gagal karena tidak ada lagu yang sedang diputar."""
+
+    def __init__(
+        self,
+        message: str = "Tidak ada lagu yang sedang diputar saat ini.",
+    ) -> None:
+        super().__init__(message)
+
+
+class AlreadyPaused(IwedApplicationError):
+    """Pemutaran musik sudah dalam keadaan dijeda."""
+
+    def __init__(
+        self,
+        message: str = "Pemutaran musik sudah dalam keadaan dijeda (paused).",
+    ) -> None:
+        super().__init__(message)
+
+
+class NotPaused(IwedApplicationError):
+    """Pemutaran musik sedang berjalan dan tidak dalam keadaan jeda."""
+
+    def __init__(
+        self,
+        message: str = "Pemutaran musik sedang berjalan (tidak dalam keadaan jeda).",
+    ) -> None:
+        super().__init__(message)
+
+
+class QueuePageOutOfRange(IwedApplicationError):
+    """Nomor halaman antrean di luar rentang halaman yang tersedia."""
+
+    def __init__(
+        self,
+        max_page: int = 1,
+        message: str | None = None,
+    ) -> None:
+        self.max_page = max_page
+        msg = (
+            message
+            or f"Nomor halaman antrean tidak valid. Halaman yang tersedia: 1 sampai {max_page}."
+        )
+        super().__init__(msg)
+
+
+class EntrySuperseded(IwedApplicationError):
+    """Lagu dibatalkan atau dilewati saat menunggu giliran putar."""
+
+    def __init__(
+        self,
+        message: str = "Lagu telah dilewati atau dibatalkan dari antrean.",
+    ) -> None:
+        super().__init__(message)
+
+
+class PlaybackReconciliationFailed(IwedApplicationError):
+    """Rekonsiliasi status pemutaran gagal setelah operasi audio fisik."""
+
+    def __init__(
+        self,
+        message: str = "Gagal merekonsiliasi status pemutaran audio.",
+    ) -> None:
+        super().__init__(message)
+
+
+class CompliantSourceUnavailable(IwedApplicationError):
+    """Sumber audio tidak tersedia pada mode kebijakan compliance-first."""
+
+    def __init__(
+        self,
+        message: str = (
+            "Sumber audio belum tersedia pada mode compliance-first. "
+            "Silakan aktifkan mode prototype jika diizinkan."
+        ),
+    ) -> None:
+        super().__init__(message)

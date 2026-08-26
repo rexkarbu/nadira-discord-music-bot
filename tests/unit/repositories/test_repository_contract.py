@@ -496,3 +496,37 @@ class BaseQueueRepositoryContractTests(ABC):
             InvalidStateTransition, match="Status 'idle' wajib memiliki current_entry bernilai None"
         ):
             await repo.apply_playback_transition(100, trans_idle_invalid, expected_version=0)
+
+    @pytest.mark.asyncio
+    async def test_apply_playback_transition_paused_to_idle(self) -> None:
+        repo = await self.create_repository()
+        e1 = make_entry(guild_id=100, title="Song 1")
+
+        # Setup PLAYING -> PAUSED
+        await repo.append(100, [e1], expected_version=0)  # v=1
+        await repo.update_session_state(
+            100, SessionStateUpdate(state=PlaybackState.CONNECTING), expected_version=1
+        )  # v=2
+        await repo.update_session_state(
+            100,
+            SessionStateUpdate(state=PlaybackState.IDLE, voice_channel_id=999),
+            expected_version=2,
+        )  # v=3
+        _, _s4 = await repo.claim_next(100, expected_version=3)  # v=4, current=e1, PLAYING
+        s5 = await repo.update_session_state(
+            100, SessionStateUpdate(state=PlaybackState.PAUSED), expected_version=4
+        )  # v=5, PAUSED
+        assert s5.state == PlaybackState.PAUSED
+
+        # Transition PAUSED -> IDLE
+        trans = PlaybackTransition(
+            next_current_entry=None,
+            next_upcoming=(),
+            next_state=PlaybackState.IDLE,
+            increment_generation=True,
+        )
+        s6 = await repo.apply_playback_transition(100, trans, expected_version=5)
+        assert s6.version == 6
+        assert s6.state == PlaybackState.IDLE
+        assert s6.current_entry is None
+        assert s6.generation == 2
